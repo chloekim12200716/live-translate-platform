@@ -4,6 +4,10 @@ import {
   PlatformLayoutComponent,
   PlatformSession
 } from "../../data/mockPlatformData";
+import {
+  getBackgroundSize,
+  getComponentFrameStyle
+} from "../../utils/layoutEditor";
 import CaptionComponent from "./CaptionComponent";
 import NoticeComponent from "./NoticeComponent";
 import QAComponent from "./QAComponent";
@@ -14,20 +18,6 @@ interface DisplayRendererProps {
   layout: PlatformLayout;
   session: PlatformSession;
   languageCode: string;
-}
-
-function getBackgroundSize(fit: PlatformLayout["backgroundFit"]) {
-  if (fit === "fill") return "100% 100%";
-  return fit;
-}
-
-function getComponentFrameStyle(component: PlatformLayoutComponent, layout: PlatformLayout) {
-  return {
-    left: `${((component.x - 1) / layout.columns) * 100}%`,
-    top: `${((component.y - 1) / layout.rows) * 100}%`,
-    width: `${(component.w / layout.columns) * 100}%`,
-    height: `${(component.h / layout.rows) * 100}%`
-  };
 }
 
 function renderComponent(component: PlatformLayoutComponent, session: PlatformSession, languageCode: string) {

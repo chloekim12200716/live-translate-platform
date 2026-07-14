@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Trash2 } from "lucide-react";
 import {
   mockPlatformLayout,
   mockPlatformSession,
   PlatformComponentType,
-  PlatformLayout,
   PlatformLayoutComponent
 } from "../../data/mockPlatformData";
 import {
@@ -13,67 +11,17 @@ import {
   loadStoredLayout,
   saveStoredLayout
 } from "../../data/platformLayoutStorage";
-
-const componentTypeOptions: PlatformComponentType[] = ["video", "slide", "caption", "qa", "notice"];
-const backgroundFitOptions: PlatformLayout["backgroundFit"][] = ["cover", "contain", "fill"];
-const layoutUnitStep = 0.25;
-
-function clampGridValue(value: number, min: number, max: number) {
-  if (Number.isNaN(value)) return min;
-  return Number(Math.min(Math.max(value, min), max).toFixed(2));
-}
-
-function snapLayoutUnit(value: number) {
-  return Number((Math.round(value / layoutUnitStep) * layoutUnitStep).toFixed(2));
-}
-
-function getComponentFrameStyle(component: PlatformLayoutComponent, layout: PlatformLayout) {
-  return {
-    left: `${((component.x - 1) / layout.columns) * 100}%`,
-    top: `${((component.y - 1) / layout.rows) * 100}%`,
-    width: `${(component.w / layout.columns) * 100}%`,
-    height: `${(component.h / layout.rows) * 100}%`
-  };
-}
-
-function componentDisplayName(type: PlatformComponentType) {
-  switch (type) {
-    case "video":
-      return "Video";
-    case "slide":
-      return "Slide";
-    case "caption":
-      return "Caption";
-    case "qa":
-      return "Q&A";
-    case "notice":
-      return "Notice";
-    default:
-      return type;
-  }
-}
-
-function getDefaultComponentSize(type: PlatformComponentType) {
-  switch (type) {
-    case "video":
-      return { w: 8, h: 5 };
-    case "slide":
-      return { w: 8, h: 5 };
-    case "caption":
-      return { w: 12, h: 2 };
-    case "qa":
-      return { w: 5, h: 4 };
-    case "notice":
-      return { w: 10, h: 2 };
-    default:
-      return { w: 6, h: 3 };
-  }
-}
-
-function getBackgroundSize(fit: PlatformLayout["backgroundFit"]) {
-  if (fit === "fill") return "100% 100%";
-  return fit;
-}
+import BackgroundSettingsPanel from "../../components/platform/layoutEditor/BackgroundSettingsPanel";
+import ComponentListPanel from "../../components/platform/layoutEditor/ComponentListPanel";
+import ComponentSettingsPanel from "../../components/platform/layoutEditor/ComponentSettingsPanel";
+import LayoutCanvas from "../../components/platform/layoutEditor/LayoutCanvas";
+import {
+  clampGridValue,
+  componentDisplayName,
+  getDefaultComponentSize,
+  layoutUnitStep,
+  snapLayoutUnit
+} from "../../utils/layoutEditor";
 
 export default function SessionLayoutEditorPage() {
   const { sessionId } = useParams();
@@ -452,362 +400,44 @@ export default function SessionLayoutEditorPage() {
             </div>
           </div>
 
-          <div
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setIsBackgroundDragActive(true);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsBackgroundDragActive(true);
-            }}
-            onDragLeave={() => setIsBackgroundDragActive(false)}
-            onDrop={handleBackgroundDrop}
-            className={`relative overflow-hidden rounded-xl border bg-slate-950 shadow-inner transition ${
-              isBackgroundDragActive ? "border-indigo-300 ring-4 ring-indigo-200" : "border-slate-300"
-            }`}
-            style={{
-              aspectRatio: `${layout.canvasWidth} / ${layout.canvasHeight}`,
-              backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.55)), url(${layout.backgroundImageUrl})`,
-              backgroundColor: layout.backgroundColor,
-              backgroundPosition: `${layout.backgroundPositionX}% ${layout.backgroundPositionY}%`,
-              backgroundRepeat: "no-repeat",
-              backgroundSize: getBackgroundSize(layout.backgroundFit)
-            }}
-          >
-            {isBackgroundDragActive && (
-              <div className="pointer-events-none absolute inset-0 z-[200] flex items-center justify-center bg-indigo-950/55 text-sm font-bold text-white backdrop-blur-sm">
-                배경 이미지 파일을 여기에 놓으세요
-              </div>
-            )}
-            <div ref={gridRef} className="relative h-full">
-              {layout.components.map((component) => {
-                const isSelected = component.id === selectedComponent?.id;
+          <LayoutCanvas
+            layout={layout}
+            selectedComponentId={selectedComponentId}
+            draggingComponentId={draggingComponentId}
+            resizingComponentId={resizingComponentId}
+            isBackgroundDragActive={isBackgroundDragActive}
+            gridRef={gridRef}
+            onBackgroundDragActiveChange={setIsBackgroundDragActive}
+            onBackgroundDrop={handleBackgroundDrop}
+            onSelectComponent={setSelectedComponentId}
+            onStartDrag={handleStartDrag}
+            onStartResize={handleStartResize}
+            onComponentKeyDown={handleComponentKeyDown}
+            onDeleteComponent={handleDeleteComponent}
+          />
 
-                return (
-                  <div
-                    key={component.id}
-                    role="button"
-                    tabIndex={0}
-                    onPointerDown={(event) => handleStartDrag(event, component)}
-                    onClick={() => setSelectedComponentId(component.id)}
-                    onKeyDown={(event) => handleComponentKeyDown(event, component)}
-                    className={`group relative min-h-0 cursor-move select-none rounded-lg border-2 p-2 text-left shadow-lg transition ${
-                      isSelected
-                        ? "border-yellow-300 bg-yellow-300/30 text-white ring-2 ring-yellow-200"
-                        : "border-white/40 bg-slate-950/55 text-slate-100 hover:border-cyan-200"
-                    }`}
-                    style={{
-                      ...getComponentFrameStyle(component, layout),
-                      position: "absolute",
-                      opacity: component.visible === false ? 0.42 : 1,
-                      transform: draggingComponentId === component.id || resizingComponentId === component.id ? "scale(1.01)" : undefined,
-                      zIndex: component.zIndex
-                    }}
-                  >
-                    <span className="block truncate text-xs font-black uppercase tracking-wider">
-                      {component.label}
-                    </span>
-                    <span className="mt-1 block truncate font-mono text-[11px] opacity-80">
-                      {component.type.toUpperCase()} / x:{component.x} y:{component.y} w:{component.w} h:{component.h}
-                    </span>
-                    {component.visible === false && (
-                      <span className="mt-1 inline-flex rounded bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-300">
-                        hidden
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDeleteComponent(component.id);
-                      }}
-                      className="absolute right-1 top-1 rounded bg-rose-500/90 p-1 text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100 focus:opacity-100"
-                      title="컴포넌트 삭제"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                    <div
-                      role="presentation"
-                      onPointerDown={(event) => handleStartResize(event, component)}
-                      className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm border border-white/80 bg-indigo-500 shadow"
-                      title="크기 조정"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">배경 이미지 표시</h4>
-              <span className="font-mono text-[11px] text-slate-500">
-                {layout.backgroundFit} / {layout.backgroundPositionX}, {layout.backgroundPositionY}
-              </span>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-6">
-              <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">Canvas W</span>
-                <input
-                  type="number"
-                  min={320}
-                  value={layout.canvasWidth}
-                  onChange={(event) =>
-                    setLayout((currentLayout) => ({
-                      ...currentLayout,
-                      canvasWidth: Math.max(320, Number(event.target.value) || 1920)
-                    }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">Canvas H</span>
-                <input
-                  type="number"
-                  min={180}
-                  value={layout.canvasHeight}
-                  onChange={(event) =>
-                    setLayout((currentLayout) => ({
-                      ...currentLayout,
-                      canvasHeight: Math.max(180, Number(event.target.value) || 1080)
-                    }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">Fit</span>
-                <select
-                  value={layout.backgroundFit}
-                  onChange={(event) =>
-                    setLayout((currentLayout) => ({
-                      ...currentLayout,
-                      backgroundFit: event.target.value as PlatformLayout["backgroundFit"]
-                    }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {backgroundFitOptions.map((fit) => (
-                    <option key={fit} value={fit}>
-                      {fit.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">Position X</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={layout.backgroundPositionX}
-                  onChange={(event) =>
-                    setLayout((currentLayout) => ({
-                      ...currentLayout,
-                      backgroundPositionX: Number(event.target.value)
-                    }))
-                  }
-                  className="w-full accent-indigo-600"
-                />
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">Position Y</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={layout.backgroundPositionY}
-                  onChange={(event) =>
-                    setLayout((currentLayout) => ({
-                      ...currentLayout,
-                      backgroundPositionY: Number(event.target.value)
-                    }))
-                  }
-                  className="w-full accent-indigo-600"
-                />
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">Background Color</span>
-                <input
-                  type="color"
-                  value={layout.backgroundColor}
-                  onChange={(event) =>
-                    setLayout((currentLayout) => ({
-                      ...currentLayout,
-                      backgroundColor: event.target.value
-                    }))
-                  }
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 py-1"
-                />
-              </label>
-            </div>
-          </div>
+          <BackgroundSettingsPanel
+            layout={layout}
+            onLayoutChange={setLayout}
+          />
         </div>
 
-        <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          {selectedComponent ? (
-            <div className="space-y-5">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Selected Component</p>
-                <h3 className="mt-1 text-lg font-bold text-slate-900">{selectedComponent.label}</h3>
-                <p className="font-mono text-xs text-slate-500">{selectedComponent.id}</p>
-              </div>
-
-              <label className="block space-y-1">
-                <span className="text-xs font-bold text-slate-500">Label / Name</span>
-                <input
-                  type="text"
-                  value={selectedComponent.label}
-                  onChange={(event) => updateSelectedComponent({ label: event.target.value })}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-xs font-bold text-slate-500">Type</span>
-                <select
-                  value={selectedComponent.type}
-                  onChange={(event) => updateSelectedComponent({ type: event.target.value as PlatformComponentType })}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {componentTypeOptions.map((type) => (
-                    <option key={type} value={type}>
-                      {type.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                {(["x", "y", "w", "h"] as const).map((field) => (
-                  <label key={field} className="block space-y-1">
-                    <span className="text-xs font-bold uppercase text-slate-500">
-                      {field === "w" ? "Width" : field === "h" ? "Height" : field}
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      step={layoutUnitStep}
-                      max={field === "x" || field === "w" ? layout.columns : layout.rows}
-                      value={selectedComponent[field]}
-                      onChange={(event) => handleNumberChange(field, event.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </label>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <span className="text-xs font-bold text-slate-600">Visible</span>
-                  <input
-                    type="checkbox"
-                    checked={selectedComponent.visible !== false}
-                    onChange={(event) => updateSelectedComponent({ visible: event.target.checked })}
-                    className="h-4 w-4 accent-indigo-600"
-                  />
-                </label>
-
-                <label className="block space-y-1">
-                  <span className="text-xs font-bold text-slate-500">zIndex</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={selectedComponent.zIndex}
-                    onChange={(event) => updateSelectedComponent({ zIndex: Number(event.target.value) })}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </label>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleDeleteSelectedComponent}
-                className="w-full rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100"
-              >
-                선택 컴포넌트 삭제
-              </button>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-                <p className="font-bold text-slate-800">저장 방식</p>
-                <p className="mt-1 leading-relaxed">
-                  현재 단계에서는 DB 대신 브라우저 localStorage에 저장합니다. 저장 후 미리보기를 누르면 live 화면에서 같은 레이아웃을 읽습니다.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">선택 가능한 컴포넌트가 없습니다.</p>
-          )}
-        </aside>
+        <ComponentSettingsPanel
+          layout={layout}
+          selectedComponent={selectedComponent}
+          onUpdateSelectedComponent={updateSelectedComponent}
+          onNumberChange={handleNumberChange}
+          onDeleteSelectedComponent={handleDeleteSelectedComponent}
+        />
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-900">컴포넌트 목록</h3>
-          <div className="flex flex-wrap gap-2">
-            {componentTypeOptions.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => handleAddComponent(type)}
-                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-              >
-                Add {componentDisplayName(type)}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {layout.components.map((component) => (
-            <div
-              key={component.id}
-              className={`rounded-xl border p-3 transition ${
-                component.id === selectedComponent?.id
-                  ? "border-indigo-300 bg-indigo-50"
-                  : "border-slate-200 bg-slate-50 hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedComponentId(component.id)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-xs font-bold text-slate-900">{component.label}</p>
-                    {component.visible === false && (
-                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500">
-                        hidden
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 font-mono text-[11px] text-slate-500">
-                    {component.type.toUpperCase()} / {component.x},{component.y},{component.w},{component.h} / z:{component.zIndex}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteComponent(component.id)}
-                  className="rounded-md p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                  title="컴포넌트 삭제"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ComponentListPanel
+        components={layout.components}
+        selectedComponentId={selectedComponentId}
+        onAddComponent={handleAddComponent}
+        onSelectComponent={setSelectedComponentId}
+        onDeleteComponent={handleDeleteComponent}
+      />
     </div>
   );
 }
