@@ -16,6 +16,20 @@ interface DisplayRendererProps {
   languageCode: string;
 }
 
+function getBackgroundSize(fit: PlatformLayout["backgroundFit"]) {
+  if (fit === "fill") return "100% 100%";
+  return fit;
+}
+
+function getComponentFrameStyle(component: PlatformLayoutComponent, layout: PlatformLayout) {
+  return {
+    left: `${((component.x - 1) / layout.columns) * 100}%`,
+    top: `${((component.y - 1) / layout.rows) * 100}%`,
+    width: `${(component.w / layout.columns) * 100}%`,
+    height: `${(component.h / layout.rows) * 100}%`
+  };
+}
+
 function renderComponent(component: PlatformLayoutComponent, session: PlatformSession, languageCode: string) {
   switch (component.type) {
     case "video":
@@ -34,15 +48,10 @@ function renderComponent(component: PlatformLayoutComponent, session: PlatformSe
 }
 
 export default function DisplayRenderer({ layout, session, languageCode }: DisplayRendererProps) {
+  const canvasRatio = layout.canvasWidth / layout.canvasHeight;
+
   return (
-    <div
-      className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-950 p-4 md:p-6"
-      style={{
-        backgroundImage: `linear-gradient(rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.82)), url(${layout.backgroundImageUrl})`,
-        backgroundPosition: "center",
-        backgroundSize: "cover"
-      }}
-    >
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 p-4 md:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-white">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Session</p>
@@ -53,27 +62,34 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
         </div>
       </div>
 
-      <div
-        className="grid min-h-[calc(100vh-9rem)] gap-3"
-        style={{
-          gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${layout.rows}, minmax(2.5rem, 1fr))`
-        }}
-      >
-        {layout.components.map((component) => (
-          <section
-            key={component.id}
-            aria-label={component.label}
-            className="min-h-0"
-            style={{
-              gridColumn: `${component.x} / span ${component.w}`,
-              gridRow: `${component.y} / span ${component.h}`,
-              zIndex: component.zIndex
-            }}
-          >
-            {renderComponent(component, session, languageCode)}
-          </section>
-        ))}
+      <div className="flex justify-center">
+        <div
+          className="relative w-full overflow-hidden rounded-xl"
+          style={{
+            aspectRatio: `${layout.canvasWidth} / ${layout.canvasHeight}`,
+            backgroundImage: `linear-gradient(rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.82)), url(${layout.backgroundImageUrl})`,
+            backgroundColor: layout.backgroundColor,
+            backgroundPosition: `${layout.backgroundPositionX}% ${layout.backgroundPositionY}%`,
+            backgroundRepeat: "no-repeat",
+            backgroundSize: getBackgroundSize(layout.backgroundFit),
+            maxHeight: "calc(100vh - 8rem)",
+            maxWidth: `calc((100vh - 8rem) * ${canvasRatio})`
+          }}
+        >
+          {layout.components.filter((component) => component.visible !== false).map((component) => (
+            <section
+              key={component.id}
+              aria-label={component.label}
+              className="absolute min-h-0"
+              style={{
+                ...getComponentFrameStyle(component, layout),
+                zIndex: component.zIndex
+              }}
+            >
+              {renderComponent(component, session, languageCode)}
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );

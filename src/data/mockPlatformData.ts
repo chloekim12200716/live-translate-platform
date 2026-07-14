@@ -39,6 +39,7 @@ export interface PlatformLayoutComponent {
   y: number;
   w: number;
   h: number;
+  visible: boolean;
   zIndex: number;
 }
 
@@ -49,7 +50,13 @@ export interface PlatformLayout {
   name: string;
   columns: number;
   rows: number;
+  canvasWidth: number;
+  canvasHeight: number;
   backgroundImageUrl: string;
+  backgroundFit: "cover" | "contain" | "fill";
+  backgroundPositionX: number;
+  backgroundPositionY: number;
+  backgroundColor: string;
   components: PlatformLayoutComponent[];
 }
 
@@ -70,10 +77,10 @@ export const mockPlatformEvent: PlatformEvent = {
 };
 
 export const mockPlatformSession: PlatformSession = {
-  id: "session-cardiometabolic-update",
+  id: "main-keynote",
   eventId: mockPlatformEvent.id,
   title: "Dual-Targeting Therapy for Cardiometabolic Diseases",
-  slug: "cardiometabolic-update",
+  slug: "main-keynote",
   speakerName: "Dr. Robert C.",
   speakerAffiliation: "Cleveland Clinic",
   sourceLanguageCode: "en",
@@ -126,13 +133,19 @@ export const mockPlatformLayout: PlatformLayout = {
   name: "Default Live Translation Stage",
   columns: 24,
   rows: 14,
+  canvasWidth: 1920,
+  canvasHeight: 1080,
   backgroundImageUrl: mockPlatformEvent.backgroundImageUrl,
+  backgroundFit: "cover",
+  backgroundPositionX: 50,
+  backgroundPositionY: 50,
+  backgroundColor: "#020617",
   components: [
-    { id: "component-video", type: "video", label: "Video", x: 2, y: 2, w: 11, h: 6, zIndex: 1 },
-    { id: "component-slide", type: "slide", label: "Slide", x: 13, y: 2, w: 10, h: 6, zIndex: 1 },
-    { id: "component-caption", type: "caption", label: "Caption", x: 4, y: 9, w: 16, h: 3, zIndex: 2 },
-    { id: "component-qa", type: "qa", label: "Q&A", x: 20, y: 9, w: 4, h: 4, zIndex: 2 },
-    { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 12, w: 17, h: 2, zIndex: 2 }
+    { id: "component-video", type: "video", label: "Video", x: 2, y: 2, w: 11, h: 6, visible: true, zIndex: 1 },
+    { id: "component-slide", type: "slide", label: "Slide", x: 13, y: 2, w: 10, h: 6, visible: true, zIndex: 1 },
+    { id: "component-caption", type: "caption", label: "Caption", x: 4, y: 9, w: 16, h: 3, visible: true, zIndex: 2 },
+    { id: "component-qa", type: "qa", label: "Q&A", x: 20, y: 9, w: 4, h: 4, visible: true, zIndex: 2 },
+    { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 12, w: 17, h: 2, visible: true, zIndex: 2 }
   ]
 };
 
