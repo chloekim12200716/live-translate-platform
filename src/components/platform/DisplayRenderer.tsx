@@ -1,0 +1,80 @@
+import React from "react";
+import {
+  PlatformLayout,
+  PlatformLayoutComponent,
+  PlatformSession
+} from "../../data/mockPlatformData";
+import CaptionComponent from "./CaptionComponent";
+import NoticeComponent from "./NoticeComponent";
+import QAComponent from "./QAComponent";
+import SlideComponent from "./SlideComponent";
+import VideoComponent from "./VideoComponent";
+
+interface DisplayRendererProps {
+  layout: PlatformLayout;
+  session: PlatformSession;
+  languageCode: string;
+}
+
+function renderComponent(component: PlatformLayoutComponent, session: PlatformSession, languageCode: string) {
+  switch (component.type) {
+    case "video":
+      return <VideoComponent session={session} />;
+    case "slide":
+      return <SlideComponent session={session} />;
+    case "caption":
+      return <CaptionComponent languageCode={languageCode} />;
+    case "qa":
+      return <QAComponent />;
+    case "notice":
+      return <NoticeComponent />;
+    default:
+      return null;
+  }
+}
+
+export default function DisplayRenderer({ layout, session, languageCode }: DisplayRendererProps) {
+  return (
+    <div
+      className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-950 p-4 md:p-6"
+      style={{
+        backgroundImage: `linear-gradient(rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.82)), url(${layout.backgroundImageUrl})`,
+        backgroundPosition: "center",
+        backgroundSize: "cover"
+      }}
+    >
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-white">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Session</p>
+          <h1 className="text-xl font-bold md:text-2xl">{session.title}</h1>
+        </div>
+        <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide backdrop-blur">
+          /live/{session.slug}/{languageCode}
+        </div>
+      </div>
+
+      <div
+        className="grid min-h-[calc(100vh-9rem)] gap-3"
+        style={{
+          gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${layout.rows}, minmax(2.5rem, 1fr))`
+        }}
+      >
+        {layout.components.map((component) => (
+          <section
+            key={component.id}
+            aria-label={component.label}
+            className="min-h-0"
+            style={{
+              gridColumn: `${component.x} / span ${component.w}`,
+              gridRow: `${component.y} / span ${component.h}`,
+              zIndex: component.zIndex
+            }}
+          >
+            {renderComponent(component, session, languageCode)}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
