@@ -16,6 +16,7 @@ app.use(express.json());
 let aiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 
 const translationLanguageLabels: Record<string, string> = {
   ar: "Arabic",
@@ -92,6 +93,70 @@ function getFallbackTranslation(text: string, sourceLang: string | undefined, ta
   return `[AI Demo Translation:${normalizedTargetLang}] ${text}${detectedTermLabel}`;
 }
 
+interface TranslationResult {
+  translatedText: string;
+  engine: string;
+  sourceLang: string;
+  targetLang: string;
+}
+
+async function translateText(text: string, sourceLang: string | undefined, targetLang: string | undefined): Promise<TranslationResult> {
+  const normalizedSourceLang = (sourceLang || "en").toLowerCase();
+  const normalizedTargetLang = (targetLang || "ko").toLowerCase();
+
+  if (normalizedSourceLang === normalizedTargetLang) {
+    return {
+      translatedText: text,
+      engine: "Source Caption",
+      sourceLang: normalizedSourceLang,
+      targetLang: normalizedTargetLang
+    };
+  }
+
+  const dictionaryContext = medicalDictionary.map(item => `- ${item.term}: ${item.definition}`).join("\n");
+  const systemInstruction = `You are an expert medical translator specializing in pharmaceutical and clinical conference translation.
+Translate from ${getLanguageLabel(normalizedSourceLang)} into ${getLanguageLabel(normalizedTargetLang)} accurately, keeping medical terms correct and clean.
+For Korean output, use polite medical conference style. For other languages, use natural academic conference style.
+Here is a list of approved medical dictionary terms and definitions to respect if they appear in the source text:
+${dictionaryContext}
+
+Output ONLY the direct translation. Do not include extra comments, intros, or explanations.`;
+
+  if (aiClient) {
+    try {
+      const response = await Promise.race([
+        aiClient.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: text,
+          config: {
+            systemInstruction,
+            temperature: 0.1,
+          }
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Gemini translation timed out after ${TRANSLATION_TIMEOUT_MS}ms`)), TRANSLATION_TIMEOUT_MS);
+        })
+      ]);
+      const translatedText = response.text?.trim() || "";
+      return {
+        translatedText,
+        engine: `Gemini ${GEMINI_MODEL}`,
+        sourceLang: normalizedSourceLang,
+        targetLang: normalizedTargetLang
+      };
+    } catch (error: any) {
+      console.error("Gemini Translation Error:", error);
+    }
+  }
+
+  return {
+    translatedText: getFallbackTranslation(text, normalizedSourceLang, normalizedTargetLang),
+    engine: "Rule-based Medical Dict Engine",
+    sourceLang: normalizedSourceLang,
+    targetLang: normalizedTargetLang
+  };
+}
+
 if (API_KEY && API_KEY !== "MY_GEMINI_API_KEY") {
   try {
     aiClient = new GoogleGenAI({
@@ -159,6 +224,39 @@ interface Note {
   timestamp: number;
   text: string;
 }
+
+const sampleLiveCaptionSegments = [
+  {
+    id: "live-caption-1",
+    timestamp: 0,
+    speaker: "Dr. Robert",
+    text: "Good evening, colleagues. Today we will review the clinical trials of dual-targeting therapies."
+  },
+  {
+    id: "live-caption-2",
+    timestamp: 6,
+    speaker: "Dr. Robert",
+    text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk."
+  },
+  {
+    id: "live-caption-3",
+    timestamp: 12,
+    speaker: "Dr. Robert",
+    text: "Specifically, we will look at how GLP-1 receptor agonists alter metabolic functions."
+  },
+  {
+    id: "live-caption-4",
+    timestamp: 18,
+    speaker: "Dr. Robert",
+    text: "The primary endpoint was evaluated over a period of 48 weeks."
+  },
+  {
+    id: "live-caption-5",
+    timestamp: 24,
+    speaker: "Dr. Robert",
+    text: "We also analyzed the risk of serious adverse events in the treatment group."
+  }
+];
 
 // In-Memory Live State
 let appState = {
@@ -327,56 +425,84 @@ app.post("/api/translate", async (req, res) => {
     return res.status(400).json({ error: "No text specified for translation" });
   }
 
-  const normalizedSourceLang = (sourceLang || "en").toLowerCase();
-  const normalizedTargetLang = (targetLang || "ko").toLowerCase();
-  if (normalizedSourceLang === normalizedTargetLang) {
-    return res.json({
-      translatedText: text,
-      engine: "Source Caption",
-      sourceLang: normalizedSourceLang,
-      targetLang: normalizedTargetLang
-    });
-  }
+  res.json(await translateText(text, sourceLang, targetLang));
+});
 
-  // Generate helper prompt with dictionary injection
-  const dictionaryContext = medicalDictionary.map(item => `- ${item.term}: ${item.definition}`).join("\n");
-  const systemInstruction = `You are an expert medical translator specializing in pharmaceutical and clinical conference translation.
-Translate from ${getLanguageLabel(normalizedSourceLang)} into ${getLanguageLabel(normalizedTargetLang)} accurately, keeping medical terms correct and clean.
-For Korean output, use polite medical conference style. For other languages, use natural academic conference style.
-Here is a list of approved medical dictionary terms and definitions to respect if they appear in the source text:
-${dictionaryContext}
+app.get("/api/captions/stream", async (req, res) => {
+  const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
+  const sourceLang = getQueryValue(req.query.sourceLang, "en");
+  const targetLang = getQueryValue(req.query.targetLang, "ko");
+  const sessionSlug = getQueryValue(req.query.sessionSlug, "main-keynote");
+  const intervalMs = Math.max(1500, Number(getQueryValue(req.query.intervalMs, "3500")) || 3500);
+  let captionIndex = 0;
+  let timeout: NodeJS.Timeout | null = null;
+  let isClosed = false;
 
-Output ONLY the direct translation. Do not include extra comments, intros, or explanations.`;
-
-  if (aiClient) {
-    try {
-      const response = await aiClient.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: text,
-        config: {
-          systemInstruction,
-          temperature: 0.1,
-        }
-      });
-      const translatedText = response.text?.trim() || "";
-      return res.json({
-        translatedText,
-        engine: `Gemini ${GEMINI_MODEL}`,
-        sourceLang: normalizedSourceLang,
-        targetLang: normalizedTargetLang
-      });
-    } catch (error: any) {
-      console.error("Gemini Translation Error:", error);
-      // fallback to mock translation if API fails
-    }
-  }
-
-  res.json({
-    translatedText: getFallbackTranslation(text, normalizedSourceLang, normalizedTargetLang),
-    engine: "Rule-based Medical Dict Engine",
-    sourceLang: normalizedSourceLang,
-    targetLang: normalizedTargetLang
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no"
   });
+  res.write("retry: 2000\n\n");
+
+  const writeEvent = (eventName: string, payload: unknown) => {
+    res.write(`event: ${eventName}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const sendNextCaption = async () => {
+    if (isClosed) return;
+
+    const segment = sampleLiveCaptionSegments[captionIndex % sampleLiveCaptionSegments.length];
+    captionIndex += 1;
+
+    writeEvent("caption", {
+      id: `${segment.id}-${captionIndex}`,
+      sessionSlug,
+      timestamp: segment.timestamp,
+      speaker: segment.speaker,
+      sourceText: segment.text,
+      translatedText: sourceLang.toLowerCase() === targetLang.toLowerCase() ? segment.text : "Translating...",
+      engine: "Live Caption Source",
+      sourceLang,
+      targetLang,
+      isFinal: false,
+      sequence: captionIndex
+    });
+
+    const translation = await translateText(segment.text, sourceLang, targetLang);
+    if (isClosed) return;
+
+    writeEvent("caption", {
+      id: `${segment.id}-${captionIndex}`,
+      sessionSlug,
+      timestamp: segment.timestamp,
+      speaker: segment.speaker,
+      sourceText: segment.text,
+      translatedText: translation.translatedText,
+      engine: translation.engine,
+      sourceLang: translation.sourceLang,
+      targetLang: translation.targetLang,
+      isFinal: true,
+      sequence: captionIndex
+    });
+
+    timeout = setTimeout(sendNextCaption, intervalMs);
+  };
+
+  req.on("close", () => {
+    isClosed = true;
+    if (timeout) clearTimeout(timeout);
+  });
+
+  writeEvent("stream-ready", {
+    sessionSlug,
+    sourceLang,
+    targetLang,
+    intervalMs
+  });
+  await sendNextCaption();
 });
 
 // Gemini-Powered Lecture Summarizer endpoint

@@ -16,6 +16,13 @@ interface CaptionComponentProps {
   sourceText: string;
 }
 
+interface StreamCaptionPayload {
+  sourceText?: string;
+  translatedText?: string;
+  engine?: string;
+  sequence?: number;
+}
+
 export default function CaptionComponent({ languageCode, sourceLanguageCode, sourceText }: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
@@ -26,55 +33,89 @@ export default function CaptionComponent({ languageCode, sourceLanguageCode, sou
   const [engine, setEngine] = useState(normalizedLanguage === normalizedSourceLanguage ? "Source Caption" : "Local Mock Caption");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [sequence, setSequence] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    let eventSource: EventSource | null = null;
+    let didFallbackToTranslateApi = false;
 
     setCaption(fallbackCaption);
     setErrorMessage("");
+    setIsLoading(true);
+    setSequence(0);
 
-    if (normalizedLanguage === normalizedSourceLanguage) {
-      setEngine("Source Caption");
-      setIsLoading(false);
+    const requestSingleTranslation = () => {
+      setEngine("Translation API Fallback");
+      fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: sourceText,
+          sourceLang: normalizedSourceLanguage,
+          targetLang: normalizedLanguage
+        }),
+        signal: controller.signal
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Translation request failed (${response.status})`);
+          }
+          return response.json();
+        })
+        .then((data: { translatedText?: string; engine?: string }) => {
+          setCaption(data.translatedText?.trim() || fallbackCaption);
+          setEngine(data.engine || "Translation API Fallback");
+        })
+        .catch((error: Error) => {
+          if (controller.signal.aborted) return;
+          setCaption(fallbackCaption);
+          setEngine("Local Mock Caption");
+          setErrorMessage(error.message);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsLoading(false);
+          }
+        });
+    };
+
+    if (typeof EventSource === "undefined") {
+      requestSingleTranslation();
       return () => controller.abort();
     }
 
-    setIsLoading(true);
-    setEngine("Translation API");
+    const streamParams = new URLSearchParams({
+      sessionSlug: "main-keynote",
+      sourceLang: normalizedSourceLanguage,
+      targetLang: normalizedLanguage,
+      intervalMs: "3500"
+    });
 
-    fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: sourceText,
-        sourceLang: normalizedSourceLanguage,
-        targetLang: normalizedLanguage
-      }),
-      signal: controller.signal
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Translation request failed (${response.status})`);
-        }
-        return response.json();
-      })
-      .then((data: { translatedText?: string; engine?: string }) => {
-        setCaption(data.translatedText?.trim() || fallbackCaption);
-        setEngine(data.engine || "Translation API");
-      })
-      .catch((error: Error) => {
-        if (controller.signal.aborted) return;
-        setCaption(fallbackCaption);
-        setEngine("Local Mock Caption");
-        setErrorMessage(error.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      });
+    setEngine("Live Translation Stream");
+    eventSource = new EventSource(`/api/captions/stream?${streamParams.toString()}`);
+    eventSource.addEventListener("caption", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as StreamCaptionPayload;
+      setCaption(data.translatedText?.trim() || data.sourceText || fallbackCaption);
+      setEngine(data.engine || "Live Translation Stream");
+      setSequence(data.sequence || 0);
+      setIsLoading(false);
+      setErrorMessage("");
+    });
+    eventSource.onerror = () => {
+      if (didFallbackToTranslateApi) return;
+      didFallbackToTranslateApi = true;
+      eventSource?.close();
+      setErrorMessage("Live caption stream disconnected. Falling back to one-shot translation.");
+      requestSingleTranslation();
+    };
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sourceText]);
 
   return (
@@ -82,10 +123,10 @@ export default function CaptionComponent({ languageCode, sourceLanguageCode, sou
       <div className="max-w-5xl space-y-2">
         <div className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest text-yellow-200">
           <Languages className="h-4 w-4" />
-          {normalizedLanguage} captions · {engine}
+          {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
         </div>
         <p className="text-lg font-semibold leading-relaxed text-yellow-50 md:text-2xl">
-          {isLoading ? "Translating sample caption..." : caption}
+          {isLoading ? "Connecting live caption stream..." : caption}
         </p>
         {errorMessage && (
           <p className="text-xs font-medium text-rose-200">
