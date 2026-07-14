@@ -1,0 +1,6 @@
+{
+  "name": "AI 실시간 자막·통역 기반 의학행사 플랫폼",
+  "description": "다국어 의학 교육 심포지엄을 위한 실시간 AI 자막/통역, 전문 의학용어 해설사전, 원격 제어 CMS 및 양방향 VOD 기능이 통합된 의학 행사 플랫폼",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
