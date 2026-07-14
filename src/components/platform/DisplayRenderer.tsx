@@ -27,7 +27,13 @@ function renderComponent(component: PlatformLayoutComponent, session: PlatformSe
     case "slide":
       return <SlideComponent session={session} />;
     case "caption":
-      return <CaptionComponent languageCode={languageCode} />;
+      return (
+        <CaptionComponent
+          languageCode={languageCode}
+          sourceLanguageCode={session.sourceLanguageCode}
+          sourceText={session.sampleCaptionText}
+        />
+      );
     case "qa":
       return <QAComponent />;
     case "notice":

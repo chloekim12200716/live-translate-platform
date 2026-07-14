@@ -27,6 +27,7 @@ export interface PlatformSession {
   speakerAffiliation: string;
   sourceLanguageCode: string;
   videoUrl: string;
+  sampleCaptionText: string;
   mode: "live" | "vod";
   slides: PlatformSlide[];
 }
@@ -85,6 +86,7 @@ export const mockPlatformSession: PlatformSession = {
   speakerAffiliation: "Cleveland Clinic",
   sourceLanguageCode: "en",
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+  sampleCaptionText: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
   mode: "live",
   slides: [
     {

@@ -7,13 +7,89 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json());
 
 // Initialize Gemini SDK with fallback
 let aiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
+const translationLanguageLabels: Record<string, string> = {
+  ar: "Arabic",
+  zh: "Simplified Chinese",
+  en: "English",
+  fr: "French",
+  ko: "Korean",
+  ru: "Russian",
+  es: "Spanish"
+};
+
+function getLanguageLabel(languageCode: string | undefined) {
+  if (!languageCode) return "the requested language";
+  return translationLanguageLabels[languageCode.toLowerCase()] || languageCode;
+}
+
+function getFallbackTranslation(text: string, sourceLang: string | undefined, targetLang: string | undefined) {
+  const normalizedSourceLang = sourceLang?.toLowerCase() || "en";
+  const normalizedTargetLang = targetLang?.toLowerCase() || "ko";
+
+  if (normalizedSourceLang === normalizedTargetLang) {
+    return text;
+  }
+
+  const sampleMedicalTranslations: Record<string, string> = {
+    ar: "سنراجع اليوم التجارب السريرية للعلاجات مزدوجة الهدف وتأثيرها القلبي الأيضي.",
+    zh: "今天我们将回顾双靶向治疗的临床试验及其对心血管代谢的影响。",
+    en: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
+    fr: "Aujourd'hui, nous allons examiner les essais cliniques des thérapies à double cible et leur impact cardiométabolique.",
+    ko: "오늘 우리는 이중 표적 치료제의 임상 시험과 심혈관 대사 영향에 대해 검토하겠습니다.",
+    ru: "Сегодня мы рассмотрим клинические исследования препаратов двойного действия и их кардиометаболическое влияние.",
+    es: "Hoy revisaremos los ensayos clínicos de las terapias de doble objetivo y su impacto cardiometabólico."
+  };
+
+  if (
+    normalizedSourceLang === "en" &&
+    (text.includes("dual-targeting therapies") || text.includes("cardiometabolic impact"))
+  ) {
+    return sampleMedicalTranslations[normalizedTargetLang] || `[AI Demo Translation:${normalizedTargetLang}] ${text}`;
+  }
+
+  if (normalizedSourceLang === "en" && normalizedTargetLang === "ko") {
+    if (text.includes("dual-targeting therapies") || text.includes("dual-targeting mechanism")) {
+      return "오늘 우리는 이중 표적 치료제의 임상 기전 및 치료 결과를 살펴보고자 합니다.";
+    }
+    if (text.includes("SGLT2 inhibitors like empagliflozin")) {
+      return "특히 empagliflozin과 같은 SGLT2억제제는 심혈관 사망 및 심부전 입원 위험의 1차 평가지표(Primary Endpoint)를 크게 유의미하게 개선하였습니다.";
+    }
+    if (text.includes("eGFR")) {
+      return "아울러, 만성 신장 질환 환자의 진행 상태를 관찰하기 위해 eGFR(추정 사구체 여과율) 신장 지표를 면밀하게 관찰해야 합니다.";
+    }
+  }
+
+  if (normalizedTargetLang === "en") {
+    if (text.includes("시신경척수염 범주질환") || text.includes("NMOSD")) {
+      return "Today we'll discuss the therapeutic strategy for Neuromyelitis Optica Spectrum Disorder (NMOSD) patients.";
+    }
+    if (text.includes("aquaporin-4 autoantibody") || text.includes("AQP4-IgG")) {
+      return "Particularly, dual-targeting antibody treatment is extremely critical for AQP4-IgG positive patients to decrease recurrence rates.";
+    }
+    if (text.includes("재발 위험을 대조군 대비 70% 이상 유의하게 감소")) {
+      return "In clinical trials, this agent significantly reduced the recurrence risk by more than 70% compared to the control group, achieving the primary endpoint.";
+    }
+    if (text.includes("adverse event") || text.includes("이상사례")) {
+      return "During therapy, we must carefully monitor adverse events such as neutropenia or infections.";
+    }
+  }
+
+  const detectedTerms = medicalDictionary
+    .filter((item) => text.toLowerCase().includes(item.term.toLowerCase()))
+    .map((item) => item.term);
+  const detectedTermLabel = detectedTerms.length > 0 ? ` (medical terms: ${detectedTerms.join(", ")})` : "";
+
+  return `[AI Demo Translation:${normalizedTargetLang}] ${text}${detectedTermLabel}`;
+}
 
 if (API_KEY && API_KEY !== "MY_GEMINI_API_KEY") {
   try {
@@ -250,11 +326,22 @@ app.post("/api/translate", async (req, res) => {
     return res.status(400).json({ error: "No text specified for translation" });
   }
 
+  const normalizedSourceLang = (sourceLang || "en").toLowerCase();
+  const normalizedTargetLang = (targetLang || "ko").toLowerCase();
+  if (normalizedSourceLang === normalizedTargetLang) {
+    return res.json({
+      translatedText: text,
+      engine: "Source Caption",
+      sourceLang: normalizedSourceLang,
+      targetLang: normalizedTargetLang
+    });
+  }
+
   // Generate helper prompt with dictionary injection
   const dictionaryContext = medicalDictionary.map(item => `- ${item.term}: ${item.definition}`).join("\n");
-  const systemInstruction = `You are an expert medical translator specializing in pharmaceutical and clinical conference translation between English and Korean.
-Translate the text accurately, keeping medical terms correct and clean.
-Always translate the text appropriately into ${targetLang === "ko" ? "polite medical Korean (존댓말 학술 투)" : "natural academic English"}.
+  const systemInstruction = `You are an expert medical translator specializing in pharmaceutical and clinical conference translation.
+Translate from ${getLanguageLabel(normalizedSourceLang)} into ${getLanguageLabel(normalizedTargetLang)} accurately, keeping medical terms correct and clean.
+For Korean output, use polite medical conference style. For other languages, use natural academic conference style.
 Here is a list of approved medical dictionary terms and definitions to respect if they appear in the source text:
 ${dictionaryContext}
 
@@ -263,7 +350,7 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
   if (aiClient) {
     try {
       const response = await aiClient.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: GEMINI_MODEL,
         contents: text,
         config: {
           systemInstruction,
@@ -271,51 +358,24 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
         }
       });
       const translatedText = response.text?.trim() || "";
-      return res.json({ translatedText, engine: "Gemini 3.5 Flash" });
+      return res.json({
+        translatedText,
+        engine: `Gemini ${GEMINI_MODEL}`,
+        sourceLang: normalizedSourceLang,
+        targetLang: normalizedTargetLang
+      });
     } catch (error: any) {
       console.error("Gemini Translation Error:", error);
       // fallback to mock translation if API fails
     }
   }
 
-  // High-fidelity fallback translation using dictionary rules
-  let mockTranslation = "";
-  if (sourceLang === "en") {
-    // English to Korean fallback rules
-    let translated = text;
-    // Simple mock translations for scenarios
-    if (text.includes("dual-targeting therapies") || text.includes("dual-targeting mechanism")) {
-      mockTranslation = "오늘 우리는 이중 표적 치료제의 임상 기전 및 치료 결과를 살펴보고자 합니다.";
-    } else if (text.includes("SGLT2 inhibitors like empagliflozin")) {
-      mockTranslation = "특히 empagliflozin과 같은 SGLT2억제제는 심혈관 사망 및 심부전 입원 위험의 1차 평가지표(Primary Endpoint)를 크게 유의미하게 개선하였습니다.";
-    } else if (text.includes("eGFR")) {
-      mockTranslation = "아울러, 만성 신장 질환 환자의 진행 상태를 관찰하기 위해 eGFR(추정 사구체 여과율) 신장 지표를 면밀하게 관찰해야 합니다.";
-    } else {
-      // General match
-      mockTranslation = `[AI 데모 번역] ${text}`;
-      // Highlight terms
-      medicalDictionary.forEach(item => {
-        if (text.toLowerCase().includes(item.term.toLowerCase())) {
-          mockTranslation += ` (의학 용어 감지: ${item.term})`;
-        }
-      });
-    }
-  } else {
-    // Korean to English fallback rules
-    if (text.includes("시신경척수염 범주질환") || text.includes("NMOSD")) {
-      mockTranslation = "Today we'll discuss the therapeutic strategy for Neuromyelitis Optica Spectrum Disorder (NMOSD) patients.";
-    } else if (text.includes("aquaporin-4 autoantibody") || text.includes("AQP4-IgG")) {
-      mockTranslation = "Particularly, dual-targeting antibody treatment is extremely critical for AQP4-IgG positive patients to decrease recurrence rates.";
-    } else if (text.includes("재발 위험을 대조군 대비 70% 이상 유의하게 감소")) {
-      mockTranslation = "In clinical trials, this agent significantly reduced the recurrence risk by more than 70% compared to the control group, achieving the primary endpoint.";
-    } else if (text.includes("adverse event") || text.includes("이상사례")) {
-      mockTranslation = "During therapy, we must carefully monitor adverse events such as neutropenia or infections.";
-    } else {
-      mockTranslation = `[AI Demo Translation] ${text}`;
-    }
-  }
-
-  res.json({ translatedText: mockTranslation, engine: "Rule-based Medical Dict Engine" });
+  res.json({
+    translatedText: getFallbackTranslation(text, normalizedSourceLang, normalizedTargetLang),
+    engine: "Rule-based Medical Dict Engine",
+    sourceLang: normalizedSourceLang,
+    targetLang: normalizedTargetLang
+  });
 });
 
 // Gemini-Powered Lecture Summarizer endpoint
