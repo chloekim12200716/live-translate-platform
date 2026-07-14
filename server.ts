@@ -50,6 +50,74 @@ function getFallbackTranslation(text: string, sourceLang: string | undefined, ta
     ru: "Сегодня мы рассмотрим клинические исследования препаратов двойного действия и их кардиометаболическое влияние.",
     es: "Hoy revisaremos los ensayos clínicos de las terapias de doble objetivo y su impacto cardiometabólico."
   };
+  const normalizedText = text.toLowerCase();
+  const sampleCaptionFallbacks: Array<{
+    matches: string[];
+    translations: Record<string, string>;
+  }> = [
+    {
+      matches: ["good evening", "dual-targeting therapies"],
+      translations: {
+        ar: "مساء الخير، زملائي. سنراجع اليوم التجارب السريرية للعلاجات مزدوجة الهدف.",
+        zh: "各位同事，晚上好。今天我们将回顾双靶向治疗的临床试验。",
+        fr: "Bonsoir, chers collègues. Aujourd'hui, nous allons examiner les essais cliniques des thérapies à double cible.",
+        ko: "동료 여러분, 안녕하십니까. 오늘 우리는 이중 표적 치료제의 임상 시험을 검토하겠습니다.",
+        ru: "Добрый вечер, коллеги. Сегодня мы рассмотрим клинические исследования препаратов двойного действия.",
+        es: "Buenas tardes, colegas. Hoy revisaremos los ensayos clínicos de las terapias de doble objetivo."
+      }
+    },
+    {
+      matches: ["type 2 diabetes", "cardiovascular risk"],
+      translations: {
+        ar: "سنركز على المرضى المصابين بداء السكري من النوع الثاني والمعرضين لخطر قلبي وعائي مرتفع.",
+        zh: "我们将重点关注患有2型糖尿病并伴有高心血管风险的患者。",
+        fr: "Nous nous concentrerons sur les patients présentant un diabète de type 2 et un risque cardiovasculaire élevé.",
+        ko: "우리는 제2형 당뇨병과 높은 심혈관 위험을 동반한 환자군에 초점을 맞출 것입니다.",
+        ru: "Мы сосредоточимся на пациентах с сахарным диабетом 2 типа и высоким сердечно-сосудистым риском.",
+        es: "Nos centraremos en pacientes con diabetes tipo 2 y alto riesgo cardiovascular."
+      }
+    },
+    {
+      matches: ["glp-1 receptor agonists", "metabolic functions"],
+      translations: {
+        ar: "وسننظر تحديدًا في كيفية تأثير ناهضات مستقبل GLP-1 في الوظائف الأيضية.",
+        zh: "具体而言，我们将观察GLP-1受体激动剂如何改变代谢功能。",
+        fr: "Plus précisément, nous examinerons comment les agonistes du récepteur GLP-1 modifient les fonctions métaboliques.",
+        ko: "특히 GLP-1 수용체 작용제가 대사 기능을 어떻게 변화시키는지 살펴보겠습니다.",
+        ru: "В частности, мы рассмотрим, как агонисты рецептора GLP-1 изменяют метаболические функции.",
+        es: "Específicamente, analizaremos cómo los agonistas del receptor GLP-1 modifican las funciones metabólicas."
+      }
+    },
+    {
+      matches: ["primary endpoint", "48 weeks"],
+      translations: {
+        ar: "تم تقييم نقطة النهاية الأولية على مدى فترة بلغت 48 أسبوعًا.",
+        zh: "主要终点在48周期间进行了评估。",
+        fr: "Le critère d'évaluation principal a été évalué sur une période de 48 semaines.",
+        ko: "1차 평가변수는 48주 기간 동안 평가되었습니다.",
+        ru: "Первичная конечная точка оценивалась в течение 48 недель.",
+        es: "El criterio de valoración principal se evaluó durante un período de 48 semanas."
+      }
+    },
+    {
+      matches: ["serious adverse events", "treatment group"],
+      translations: {
+        ar: "كما قمنا بتحليل خطر حدوث أحداث سلبية خطيرة في مجموعة العلاج.",
+        zh: "我们还分析了治疗组发生严重不良事件的风险。",
+        fr: "Nous avons également analysé le risque d'événements indésirables graves dans le groupe de traitement.",
+        ko: "또한 치료군에서 중대한 이상사례가 발생할 위험도 분석했습니다.",
+        ru: "Мы также проанализировали риск серьезных нежелательных явлений в группе лечения.",
+        es: "También analizamos el riesgo de eventos adversos graves en el grupo de tratamiento."
+      }
+    }
+  ];
+  const matchedSampleCaption = sampleCaptionFallbacks.find(({ matches }) =>
+    matches.every((term) => normalizedText.includes(term))
+  );
+
+  if (matchedSampleCaption?.translations[normalizedTargetLang]) {
+    return matchedSampleCaption.translations[normalizedTargetLang];
+  }
 
   if (
     normalizedSourceLang === "en" &&
@@ -61,6 +129,18 @@ function getFallbackTranslation(text: string, sourceLang: string | undefined, ta
   if (normalizedSourceLang === "en" && normalizedTargetLang === "ko") {
     if (text.includes("dual-targeting therapies") || text.includes("dual-targeting mechanism")) {
       return "오늘 우리는 이중 표적 치료제의 임상 기전 및 치료 결과를 살펴보고자 합니다.";
+    }
+    if (text.includes("type 2 diabetes") && text.includes("cardiovascular risk")) {
+      return "우리는 제2형 당뇨병과 높은 심혈관 위험을 동반한 환자군에 초점을 맞출 것입니다.";
+    }
+    if (text.includes("GLP-1 receptor agonists") || text.includes("GLP-1 receptor agonist")) {
+      return "특히 GLP-1 수용체 작용제가 대사 기능을 어떻게 변화시키는지 살펴보겠습니다.";
+    }
+    if (text.includes("primary endpoint") && text.includes("48 weeks")) {
+      return "1차 평가변수는 48주 기간 동안 평가되었습니다.";
+    }
+    if (text.includes("serious adverse events") || text.includes("serious adverse event")) {
+      return "또한 치료군에서 중대한 이상사례가 발생할 위험도 분석했습니다.";
     }
     if (text.includes("SGLT2 inhibitors like empagliflozin")) {
       return "특히 empagliflozin과 같은 SGLT2억제제는 심혈관 사망 및 심부전 입원 위험의 1차 평가지표(Primary Endpoint)를 크게 유의미하게 개선하였습니다.";
