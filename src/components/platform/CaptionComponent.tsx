@@ -12,6 +12,7 @@ const captionByLanguage: Record<string, string> = {
 
 interface CaptionComponentProps {
   languageCode: string;
+  sessionSlug: string;
   sourceLanguageCode: string;
   sourceText: string;
 }
@@ -23,7 +24,11 @@ interface StreamCaptionPayload {
   sequence?: number;
 }
 
-export default function CaptionComponent({ languageCode, sourceLanguageCode, sourceText }: CaptionComponentProps) {
+interface StreamReadyPayload {
+  queuedCaptions?: number;
+}
+
+export default function CaptionComponent({ languageCode, sessionSlug, sourceLanguageCode, sourceText }: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
   const fallbackCaption = normalizedLanguage === normalizedSourceLanguage
@@ -86,14 +91,20 @@ export default function CaptionComponent({ languageCode, sourceLanguageCode, sou
     }
 
     const streamParams = new URLSearchParams({
-      sessionSlug: "main-keynote",
+      sessionSlug,
       sourceLang: normalizedSourceLanguage,
       targetLang: normalizedLanguage,
-      intervalMs: "3500"
+      replayLatest: "true"
     });
 
     setEngine("Live Translation Stream");
     eventSource = new EventSource(`/api/captions/stream?${streamParams.toString()}`);
+    eventSource.addEventListener("stream-ready", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as StreamReadyPayload;
+      setEngine("Caption Queue Connected");
+      setIsLoading(false);
+      setCaption(data.queuedCaptions ? fallbackCaption : "Waiting for live captions...");
+    });
     eventSource.addEventListener("caption", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as StreamCaptionPayload;
       setCaption(data.translatedText?.trim() || data.sourceText || fallbackCaption);
@@ -101,6 +112,10 @@ export default function CaptionComponent({ languageCode, sourceLanguageCode, sou
       setSequence(data.sequence || 0);
       setIsLoading(false);
       setErrorMessage("");
+    });
+    eventSource.addEventListener("caption-error", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as { message?: string };
+      setErrorMessage(data.message || "Live caption translation failed.");
     });
     eventSource.onerror = () => {
       if (didFallbackToTranslateApi) return;
@@ -116,7 +131,7 @@ export default function CaptionComponent({ languageCode, sourceLanguageCode, sou
         eventSource.close();
       }
     };
-  }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sourceText]);
+  }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sessionSlug, sourceText]);
 
   return (
     <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-yellow-200/20 bg-slate-950/90 px-6 py-4 text-center text-white shadow-2xl backdrop-blur">

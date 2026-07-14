@@ -30,6 +30,7 @@ function renderComponent(component: PlatformLayoutComponent, session: PlatformSe
       return (
         <CaptionComponent
           languageCode={languageCode}
+          sessionSlug={session.slug}
           sourceLanguageCode={session.sourceLanguageCode}
           sourceText={session.sampleCaptionText}
         />

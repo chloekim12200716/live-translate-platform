@@ -225,38 +225,93 @@ interface Note {
   text: string;
 }
 
-const sampleLiveCaptionSegments = [
-  {
-    id: "live-caption-1",
-    timestamp: 0,
-    speaker: "Dr. Robert",
-    text: "Good evening, colleagues. Today we will review the clinical trials of dual-targeting therapies."
-  },
-  {
-    id: "live-caption-2",
-    timestamp: 6,
-    speaker: "Dr. Robert",
-    text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk."
-  },
-  {
-    id: "live-caption-3",
-    timestamp: 12,
-    speaker: "Dr. Robert",
-    text: "Specifically, we will look at how GLP-1 receptor agonists alter metabolic functions."
-  },
-  {
-    id: "live-caption-4",
-    timestamp: 18,
-    speaker: "Dr. Robert",
-    text: "The primary endpoint was evaluated over a period of 48 weeks."
-  },
-  {
-    id: "live-caption-5",
-    timestamp: 24,
-    speaker: "Dr. Robert",
-    text: "We also analyzed the risk of serious adverse events in the treatment group."
+interface LiveCaptionSegment {
+  id: string;
+  sessionSlug: string;
+  timestamp: number;
+  speaker: string;
+  text: string;
+  sourceLang: string;
+  isFinal: boolean;
+  sequence: number;
+  createdAt: string;
+}
+
+interface CaptionStreamSubscriber {
+  id: string;
+  sessionSlug: string;
+  targetLang: string;
+  fallbackSourceLang: string;
+  writeEvent: (eventName: string, payload: unknown) => void;
+  isClosed: () => boolean;
+}
+
+let liveCaptionSequence = 0;
+const liveCaptionQueue: LiveCaptionSegment[] = [];
+const captionStreamSubscribers = new Map<string, CaptionStreamSubscriber>();
+
+function getCaptionSessionKey(sessionSlug: string | undefined) {
+  return (sessionSlug || "main-keynote").toLowerCase();
+}
+
+function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: LiveCaptionSegment) {
+  const sourceLang = segment.sourceLang || subscriber.fallbackSourceLang;
+
+  subscriber.writeEvent("caption", {
+    id: segment.id,
+    sessionSlug: segment.sessionSlug,
+    timestamp: segment.timestamp,
+    speaker: segment.speaker,
+    sourceText: segment.text,
+    translatedText: sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase() ? segment.text : "Translating...",
+    engine: "Live Caption Queue",
+    sourceLang,
+    targetLang: subscriber.targetLang,
+    isFinal: false,
+    sequence: segment.sequence
+  });
+
+  translateText(segment.text, sourceLang, subscriber.targetLang)
+    .then((translation) => {
+      if (subscriber.isClosed()) return;
+
+      subscriber.writeEvent("caption", {
+        id: segment.id,
+        sessionSlug: segment.sessionSlug,
+        timestamp: segment.timestamp,
+        speaker: segment.speaker,
+        sourceText: segment.text,
+        translatedText: translation.translatedText,
+        engine: translation.engine,
+        sourceLang: translation.sourceLang,
+        targetLang: translation.targetLang,
+        isFinal: segment.isFinal,
+        sequence: segment.sequence
+      });
+    })
+    .catch((error: Error) => {
+      if (subscriber.isClosed()) return;
+
+      subscriber.writeEvent("caption-error", {
+        id: segment.id,
+        sessionSlug: segment.sessionSlug,
+        message: error.message,
+        sequence: segment.sequence
+      });
+    });
+}
+
+function publishLiveCaption(segment: LiveCaptionSegment) {
+  liveCaptionQueue.push(segment);
+  if (liveCaptionQueue.length > 100) {
+    liveCaptionQueue.shift();
   }
-];
+
+  captionStreamSubscribers.forEach((subscriber) => {
+    if (subscriber.sessionSlug !== segment.sessionSlug) return;
+    writeLiveCaptionEvent(subscriber, segment);
+  });
+}
 
 // In-Memory Live State
 let appState = {
@@ -428,14 +483,66 @@ app.post("/api/translate", async (req, res) => {
   res.json(await translateText(text, sourceLang, targetLang));
 });
 
-app.get("/api/captions/stream", async (req, res) => {
+app.get("/api/captions/queue", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  const sourceLang = getQueryValue(req.query.sourceLang, "en");
-  const targetLang = getQueryValue(req.query.targetLang, "ko");
-  const sessionSlug = getQueryValue(req.query.sessionSlug, "main-keynote");
-  const intervalMs = Math.max(1500, Number(getQueryValue(req.query.intervalMs, "3500")) || 3500);
-  let captionIndex = 0;
-  let timeout: NodeJS.Timeout | null = null;
+  const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
+  const limit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.limit, "20")) || 20));
+  const captions = liveCaptionQueue
+    .filter((segment) => segment.sessionSlug === sessionSlug)
+    .slice(-limit);
+
+  res.json({
+    sessionSlug,
+    count: captions.length,
+    captions
+  });
+});
+
+app.post("/api/captions/publish", (req, res) => {
+  const {
+    sessionSlug,
+    timestamp,
+    speaker,
+    text,
+    sourceLang,
+    isFinal
+  } = req.body;
+
+  if (!text || typeof text !== "string") {
+    return res.status(400).json({ error: "text is required" });
+  }
+
+  liveCaptionSequence += 1;
+  const segment: LiveCaptionSegment = {
+    id: `caption-${Date.now()}-${liveCaptionSequence}`,
+    sessionSlug: getCaptionSessionKey(sessionSlug),
+    timestamp: Number(timestamp) || 0,
+    speaker: speaker || "Speaker",
+    text,
+    sourceLang: (sourceLang || "en").toLowerCase(),
+    isFinal: isFinal !== undefined ? Boolean(isFinal) : true,
+    sequence: liveCaptionSequence,
+    createdAt: new Date().toISOString()
+  };
+
+  publishLiveCaption(segment);
+
+  res.json({
+    status: "queued",
+    caption: segment,
+    subscribers: Array.from(captionStreamSubscribers.values())
+      .filter((subscriber) => subscriber.sessionSlug === segment.sessionSlug)
+      .length
+  });
+});
+
+app.get("/api/captions/stream", (req, res) => {
+  const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
+  const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
+  const targetLang = getQueryValue(req.query.targetLang, "ko").toLowerCase();
+  const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
+  const replayLatest = getQueryValue(req.query.replayLatest, "true") !== "false";
+  const subscriberId = `subscriber-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   let isClosed = false;
 
   res.writeHead(200, {
@@ -451,58 +558,39 @@ app.get("/api/captions/stream", async (req, res) => {
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
 
-  const sendNextCaption = async () => {
-    if (isClosed) return;
-
-    const segment = sampleLiveCaptionSegments[captionIndex % sampleLiveCaptionSegments.length];
-    captionIndex += 1;
-
-    writeEvent("caption", {
-      id: `${segment.id}-${captionIndex}`,
-      sessionSlug,
-      timestamp: segment.timestamp,
-      speaker: segment.speaker,
-      sourceText: segment.text,
-      translatedText: sourceLang.toLowerCase() === targetLang.toLowerCase() ? segment.text : "Translating...",
-      engine: "Live Caption Source",
-      sourceLang,
-      targetLang,
-      isFinal: false,
-      sequence: captionIndex
-    });
-
-    const translation = await translateText(segment.text, sourceLang, targetLang);
-    if (isClosed) return;
-
-    writeEvent("caption", {
-      id: `${segment.id}-${captionIndex}`,
-      sessionSlug,
-      timestamp: segment.timestamp,
-      speaker: segment.speaker,
-      sourceText: segment.text,
-      translatedText: translation.translatedText,
-      engine: translation.engine,
-      sourceLang: translation.sourceLang,
-      targetLang: translation.targetLang,
-      isFinal: true,
-      sequence: captionIndex
-    });
-
-    timeout = setTimeout(sendNextCaption, intervalMs);
+  const subscriber: CaptionStreamSubscriber = {
+    id: subscriberId,
+    sessionSlug,
+    targetLang,
+    fallbackSourceLang: sourceLang,
+    writeEvent,
+    isClosed: () => isClosed
   };
+
+  captionStreamSubscribers.set(subscriberId, subscriber);
 
   req.on("close", () => {
     isClosed = true;
-    if (timeout) clearTimeout(timeout);
+    captionStreamSubscribers.delete(subscriberId);
   });
 
   writeEvent("stream-ready", {
+    subscriberId,
     sessionSlug,
     sourceLang,
     targetLang,
-    intervalMs
+    queuedCaptions: liveCaptionQueue.filter((segment) => segment.sessionSlug === sessionSlug).length
   });
-  await sendNextCaption();
+
+  if (replayLatest) {
+    const latestSegment = liveCaptionQueue
+      .filter((segment) => segment.sessionSlug === sessionSlug)
+      .at(-1);
+
+    if (latestSegment) {
+      writeLiveCaptionEvent(subscriber, latestSegment);
+    }
+  }
 });
 
 // Gemini-Powered Lecture Summarizer endpoint
