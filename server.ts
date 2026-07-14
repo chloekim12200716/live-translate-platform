@@ -326,12 +326,80 @@ interface CaptionStreamSubscriber {
   isClosed: () => boolean;
 }
 
+interface DemoCaptionProducer {
+  sessionSlug: string;
+  sourceLang: string;
+  intervalMs: number;
+  nextIndex: number;
+  timer: NodeJS.Timeout;
+  startedAt: string;
+}
+
+const demoLiveCaptionTemplates = [
+  {
+    timestamp: 0,
+    speaker: "Dr. Robert",
+    text: "Good evening, colleagues. Today we will review the clinical trials of dual-targeting therapies."
+  },
+  {
+    timestamp: 6,
+    speaker: "Dr. Robert",
+    text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk."
+  },
+  {
+    timestamp: 12,
+    speaker: "Dr. Robert",
+    text: "Specifically, we will look at how GLP-1 receptor agonists alter metabolic functions."
+  },
+  {
+    timestamp: 18,
+    speaker: "Dr. Robert",
+    text: "The primary endpoint was evaluated over a period of 48 weeks."
+  },
+  {
+    timestamp: 24,
+    speaker: "Dr. Robert",
+    text: "We also analyzed the risk of serious adverse events in the treatment group."
+  }
+];
+
 let liveCaptionSequence = 0;
 const liveCaptionQueue: LiveCaptionSegment[] = [];
 const captionStreamSubscribers = new Map<string, CaptionStreamSubscriber>();
+const demoCaptionProducers = new Map<string, DemoCaptionProducer>();
 
 function getCaptionSessionKey(sessionSlug: string | undefined) {
   return (sessionSlug || "main-keynote").toLowerCase();
+}
+
+function createLiveCaptionSegment({
+  sessionSlug,
+  timestamp,
+  speaker,
+  text,
+  sourceLang,
+  isFinal
+}: {
+  sessionSlug: string | undefined;
+  timestamp?: number;
+  speaker?: string;
+  text: string;
+  sourceLang?: string;
+  isFinal?: boolean;
+}) {
+  liveCaptionSequence += 1;
+
+  return {
+    id: `caption-${Date.now()}-${liveCaptionSequence}`,
+    sessionSlug: getCaptionSessionKey(sessionSlug),
+    timestamp: Number(timestamp) || 0,
+    speaker: speaker || "Speaker",
+    text,
+    sourceLang: (sourceLang || "en").toLowerCase(),
+    isFinal: isFinal !== undefined ? Boolean(isFinal) : true,
+    sequence: liveCaptionSequence,
+    createdAt: new Date().toISOString()
+  };
 }
 
 function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: LiveCaptionSegment) {
@@ -391,6 +459,80 @@ function publishLiveCaption(segment: LiveCaptionSegment) {
     if (subscriber.sessionSlug !== segment.sessionSlug) return;
     writeLiveCaptionEvent(subscriber, segment);
   });
+}
+
+function publishNextDemoCaption(producer: DemoCaptionProducer) {
+  const template = demoLiveCaptionTemplates[producer.nextIndex % demoLiveCaptionTemplates.length];
+  producer.nextIndex += 1;
+
+  publishLiveCaption(createLiveCaptionSegment({
+    sessionSlug: producer.sessionSlug,
+    timestamp: template.timestamp,
+    speaker: template.speaker,
+    text: template.text,
+    sourceLang: producer.sourceLang,
+    isFinal: true
+  }));
+}
+
+function stopDemoCaptionProducer(sessionSlug: string | undefined) {
+  const sessionKey = getCaptionSessionKey(sessionSlug);
+  const producer = demoCaptionProducers.get(sessionKey);
+  if (!producer) return false;
+
+  clearInterval(producer.timer);
+  demoCaptionProducers.delete(sessionKey);
+  return true;
+}
+
+function getDemoCaptionProducerStatus(sessionSlug: string | undefined) {
+  const sessionKey = getCaptionSessionKey(sessionSlug);
+  const producer = demoCaptionProducers.get(sessionKey);
+
+  return {
+    sessionSlug: sessionKey,
+    isRunning: Boolean(producer),
+    sourceLang: producer?.sourceLang ?? "en",
+    intervalMs: producer?.intervalMs ?? null,
+    startedAt: producer?.startedAt ?? null,
+    nextIndex: producer?.nextIndex ?? 0,
+    subscribers: Array.from(captionStreamSubscribers.values())
+      .filter((subscriber) => subscriber.sessionSlug === sessionKey)
+      .length,
+    queuedCaptions: liveCaptionQueue.filter((segment) => segment.sessionSlug === sessionKey).length
+  };
+}
+
+function startDemoCaptionProducer({
+  sessionSlug,
+  sourceLang,
+  intervalMs
+}: {
+  sessionSlug: string | undefined;
+  sourceLang: string | undefined;
+  intervalMs: number;
+}) {
+  const sessionKey = getCaptionSessionKey(sessionSlug);
+  stopDemoCaptionProducer(sessionKey);
+
+  const producer: DemoCaptionProducer = {
+    sessionSlug: sessionKey,
+    sourceLang: (sourceLang || "en").toLowerCase(),
+    intervalMs: Math.max(1500, intervalMs || 3500),
+    nextIndex: 0,
+    timer: setInterval(() => {
+      const currentProducer = demoCaptionProducers.get(sessionKey);
+      if (currentProducer) {
+        publishNextDemoCaption(currentProducer);
+      }
+    }, Math.max(1500, intervalMs || 3500)),
+    startedAt: new Date().toISOString()
+  };
+
+  demoCaptionProducers.set(sessionKey, producer);
+  publishNextDemoCaption(producer);
+
+  return getDemoCaptionProducerStatus(sessionKey);
 }
 
 // In-Memory Live State
@@ -592,18 +734,14 @@ app.post("/api/captions/publish", (req, res) => {
     return res.status(400).json({ error: "text is required" });
   }
 
-  liveCaptionSequence += 1;
-  const segment: LiveCaptionSegment = {
-    id: `caption-${Date.now()}-${liveCaptionSequence}`,
-    sessionSlug: getCaptionSessionKey(sessionSlug),
-    timestamp: Number(timestamp) || 0,
-    speaker: speaker || "Speaker",
+  const segment = createLiveCaptionSegment({
+    sessionSlug,
+    timestamp,
+    speaker,
     text,
-    sourceLang: (sourceLang || "en").toLowerCase(),
-    isFinal: isFinal !== undefined ? Boolean(isFinal) : true,
-    sequence: liveCaptionSequence,
-    createdAt: new Date().toISOString()
-  };
+    sourceLang,
+    isFinal
+  });
 
   publishLiveCaption(segment);
 
@@ -613,6 +751,39 @@ app.post("/api/captions/publish", (req, res) => {
     subscribers: Array.from(captionStreamSubscribers.values())
       .filter((subscriber) => subscriber.sessionSlug === segment.sessionSlug)
       .length
+  });
+});
+
+app.get("/api/captions/demo/status", (req, res) => {
+  const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
+  res.json(getDemoCaptionProducerStatus(getQueryValue(req.query.sessionSlug, "main-keynote")));
+});
+
+app.post("/api/captions/demo/start", (req, res) => {
+  const {
+    sessionSlug,
+    sourceLang,
+    intervalMs
+  } = req.body;
+
+  res.json({
+    status: "started",
+    producer: startDemoCaptionProducer({
+      sessionSlug,
+      sourceLang,
+      intervalMs: Number(intervalMs) || 3500
+    })
+  });
+});
+
+app.post("/api/captions/demo/stop", (req, res) => {
+  const { sessionSlug } = req.body;
+  const sessionKey = getCaptionSessionKey(sessionSlug);
+  const stopped = stopDemoCaptionProducer(sessionKey);
+
+  res.json({
+    status: stopped ? "stopped" : "not-running",
+    producer: getDemoCaptionProducerStatus(sessionKey)
   });
 });
 

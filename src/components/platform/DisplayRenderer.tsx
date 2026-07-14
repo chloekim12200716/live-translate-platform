@@ -8,6 +8,7 @@ import {
   getBackgroundSize,
   getComponentFrameStyle
 } from "../../utils/layoutEditor";
+import CaptionStreamDemoControls from "./CaptionStreamDemoControls";
 import CaptionComponent from "./CaptionComponent";
 import NoticeComponent from "./NoticeComponent";
 import QAComponent from "./QAComponent";
@@ -54,8 +55,14 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
           <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Session</p>
           <h1 className="text-xl font-bold md:text-2xl">{session.title}</h1>
         </div>
-        <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide backdrop-blur">
-          /live/{session.slug}/{languageCode}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <CaptionStreamDemoControls
+            sessionSlug={session.slug}
+            sourceLanguageCode={session.sourceLanguageCode}
+          />
+          <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide backdrop-blur">
+            /live/{session.slug}/{languageCode}
+          </div>
         </div>
       </div>
 
