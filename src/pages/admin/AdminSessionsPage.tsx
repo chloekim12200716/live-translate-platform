@@ -251,7 +251,7 @@ export default function AdminSessionsPage() {
             </div>
             <h3 className="mt-1 text-lg font-bold text-slate-900">테스트 영상 지정</h3>
             <p className="mt-1 text-sm text-slate-500">
-              직접 재생 가능한 mp4/webm URL 또는 로컬 영상 파일을 지정하면 `/live` 화면의 Video 컴포넌트에서 바로 재생합니다.
+              YouTube URL, 직접 재생 가능한 mp4/webm URL, 로컬 영상 파일을 지정하면 `/live` 화면의 Video 컴포넌트에서 재생합니다.
             </p>
           </div>
           <Link
@@ -270,7 +270,7 @@ export default function AdminSessionsPage() {
                 <input
                   value={videoUrlInput}
                   onChange={(event) => setVideoUrlInput(event.target.value)}
-                  placeholder="https://.../sample.mp4 또는 .webm"
+                  placeholder="https://youtu.be/... 또는 https://.../sample.mp4"
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400"
                 />
               </label>
@@ -309,7 +309,7 @@ export default function AdminSessionsPage() {
               <p className="text-xs font-semibold text-indigo-700">{videoStatusMessage}</p>
             )}
             <p className="text-xs leading-relaxed text-slate-500">
-              YouTube, Vimeo, Google Drive 공유 페이지 URL은 video 태그에서 직접 재생되지 않습니다. 테스트에는 `.mp4` 파일 URL이나 로컬 영상 파일을 사용하세요.
+              YouTube는 iframe embed로 재생합니다. Google Drive 공유 페이지처럼 직접 재생 URL이 아닌 주소는 재생되지 않을 수 있습니다.
             </p>
           </div>
 

@@ -10,10 +10,47 @@ interface VideoComponentProps {
   session: PlatformSession;
 }
 
+function getYouTubeEmbedUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.replace(/^www\./, "");
+    let videoId = "";
+
+    if (hostname === "youtu.be") {
+      videoId = parsedUrl.pathname.split("/").filter(Boolean)[0] ?? "";
+    }
+
+    if (hostname === "youtube.com" || hostname === "m.youtube.com" || hostname === "music.youtube.com") {
+      if (parsedUrl.pathname === "/watch") {
+        videoId = parsedUrl.searchParams.get("v") ?? "";
+      } else if (parsedUrl.pathname.startsWith("/embed/")) {
+        videoId = parsedUrl.pathname.split("/")[2] ?? "";
+      } else if (parsedUrl.pathname.startsWith("/live/") || parsedUrl.pathname.startsWith("/shorts/")) {
+        videoId = parsedUrl.pathname.split("/")[2] ?? "";
+      }
+    }
+
+    if (!videoId) return "";
+
+    const start = parsedUrl.searchParams.get("t") ?? parsedUrl.searchParams.get("start");
+    const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+    embedUrl.searchParams.set("rel", "0");
+    embedUrl.searchParams.set("modestbranding", "1");
+    if (start) {
+      embedUrl.searchParams.set("start", start.replace(/\D/g, ""));
+    }
+
+    return embedUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
 export default function VideoComponent({ session }: VideoComponentProps) {
   const [videoSrc, setVideoSrc] = useState(session.videoUrl);
   const [videoLabel, setVideoLabel] = useState("Sample video");
   const [videoErrorMessage, setVideoErrorMessage] = useState("");
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(videoSrc);
 
   useEffect(() => {
     let objectUrl = "";
@@ -85,20 +122,32 @@ export default function VideoComponent({ session }: VideoComponentProps) {
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden rounded-lg border border-white/15 bg-slate-950 shadow-2xl">
-      <video
-        key={videoSrc}
-        src={videoSrc}
-        className="h-full w-full object-cover"
-        controls
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        onLoadedMetadata={() => setVideoErrorMessage("")}
-        onError={() => {
-          setVideoErrorMessage("이 URL은 브라우저 video 태그에서 직접 재생할 수 없습니다. mp4/webm 파일 URL 또는 로컬 영상 파일을 사용하세요.");
-        }}
-      />
+      {youtubeEmbedUrl ? (
+        <iframe
+          key={youtubeEmbedUrl}
+          src={youtubeEmbedUrl}
+          title={`${session.title} YouTube test video`}
+          className="h-full w-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          onLoad={() => setVideoErrorMessage("")}
+        />
+      ) : (
+        <video
+          key={videoSrc}
+          src={videoSrc}
+          className="h-full w-full object-cover"
+          controls
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          onLoadedMetadata={() => setVideoErrorMessage("")}
+          onError={() => {
+            setVideoErrorMessage("이 URL은 브라우저 video 태그에서 직접 재생할 수 없습니다. mp4/webm 파일 URL, YouTube URL 또는 로컬 영상 파일을 사용하세요.");
+          }}
+        />
+      )}
       <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-1.5 text-white backdrop-blur">
         <span className="h-2 w-2 rounded-full bg-rose-500" />
         <span className="text-xs font-semibold uppercase tracking-wide">{session.mode}</span>
@@ -107,7 +156,9 @@ export default function VideoComponent({ session }: VideoComponentProps) {
         <PlayCircle className="h-4 w-4 text-cyan-300" />
         <div className="truncate text-left">
           <p className="truncate text-xs font-bold">{session.speakerName}</p>
-          <p className="truncate text-[11px] text-slate-300">{videoLabel} · {session.speakerAffiliation}</p>
+          <p className="truncate text-[11px] text-slate-300">
+            {youtubeEmbedUrl ? "YouTube" : videoLabel} · {session.speakerAffiliation}
+          </p>
         </div>
       </div>
       {videoErrorMessage && (
