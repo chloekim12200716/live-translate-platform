@@ -55,6 +55,8 @@ async function putVideoBlob(sessionSlug: string, file: File) {
 }
 
 async function deleteVideoBlob(sessionSlug: string) {
+  if (typeof indexedDB === "undefined") return;
+
   const db = await openVideoDb();
 
   return new Promise<void>((resolve, reject) => {
@@ -112,7 +114,12 @@ export async function saveStoredVideoUrl(sessionSlug: string, url: string) {
     updatedAt: new Date().toISOString()
   };
 
-  await deleteVideoBlob(sessionSlug);
+  try {
+    await deleteVideoBlob(sessionSlug);
+  } catch (error) {
+    console.warn("Failed to clear stored video file before saving URL:", error);
+  }
+
   window.localStorage.setItem(getPlatformVideoSourceStorageKey(sessionSlug), JSON.stringify(metadata));
   emitVideoSourceUpdated(sessionSlug);
   return metadata;
@@ -135,7 +142,12 @@ export async function saveStoredVideoFile(sessionSlug: string, file: File) {
 }
 
 export async function clearStoredVideoSource(sessionSlug: string) {
-  await deleteVideoBlob(sessionSlug);
+  try {
+    await deleteVideoBlob(sessionSlug);
+  } catch (error) {
+    console.warn("Failed to clear stored video file:", error);
+  }
+
   window.localStorage.removeItem(getPlatformVideoSourceStorageKey(sessionSlug));
   emitVideoSourceUpdated(sessionSlug);
 }

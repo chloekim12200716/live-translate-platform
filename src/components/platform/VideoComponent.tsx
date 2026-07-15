@@ -13,6 +13,7 @@ interface VideoComponentProps {
 export default function VideoComponent({ session }: VideoComponentProps) {
   const [videoSrc, setVideoSrc] = useState(session.videoUrl);
   const [videoLabel, setVideoLabel] = useState("Sample video");
+  const [videoErrorMessage, setVideoErrorMessage] = useState("");
 
   useEffect(() => {
     let objectUrl = "";
@@ -25,6 +26,7 @@ export default function VideoComponent({ session }: VideoComponentProps) {
         if (!isActive) return;
         setVideoSrc(session.videoUrl);
         setVideoLabel("Sample video");
+        setVideoErrorMessage("");
         return;
       }
 
@@ -32,6 +34,7 @@ export default function VideoComponent({ session }: VideoComponentProps) {
         if (!isActive) return;
         setVideoSrc(metadata.url);
         setVideoLabel("Custom URL");
+        setVideoErrorMessage("");
         return;
       }
 
@@ -43,12 +46,14 @@ export default function VideoComponent({ session }: VideoComponentProps) {
           objectUrl = URL.createObjectURL(blob);
           setVideoSrc(objectUrl);
           setVideoLabel(metadata.fileName ?? "Uploaded video");
+          setVideoErrorMessage("");
           return;
         }
       }
 
       setVideoSrc(session.videoUrl);
       setVideoLabel("Sample video");
+      setVideoErrorMessage("");
     };
 
     const handleVideoSourceUpdated = (event: Event) => {
@@ -81,12 +86,18 @@ export default function VideoComponent({ session }: VideoComponentProps) {
   return (
     <div className="relative h-full min-h-0 overflow-hidden rounded-lg border border-white/15 bg-slate-950 shadow-2xl">
       <video
+        key={videoSrc}
         src={videoSrc}
         className="h-full w-full object-cover"
         controls
         muted
         loop
         playsInline
+        preload="metadata"
+        onLoadedMetadata={() => setVideoErrorMessage("")}
+        onError={() => {
+          setVideoErrorMessage("이 URL은 브라우저 video 태그에서 직접 재생할 수 없습니다. mp4/webm 파일 URL 또는 로컬 영상 파일을 사용하세요.");
+        }}
       />
       <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-1.5 text-white backdrop-blur">
         <span className="h-2 w-2 rounded-full bg-rose-500" />
@@ -99,6 +110,11 @@ export default function VideoComponent({ session }: VideoComponentProps) {
           <p className="truncate text-[11px] text-slate-300">{videoLabel} · {session.speakerAffiliation}</p>
         </div>
       </div>
+      {videoErrorMessage && (
+        <div className="pointer-events-none absolute inset-x-3 top-12 rounded-md border border-rose-300/30 bg-rose-950/85 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-50 backdrop-blur">
+          {videoErrorMessage}
+        </div>
+      )}
     </div>
   );
 }
