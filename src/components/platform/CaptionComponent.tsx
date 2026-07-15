@@ -39,7 +39,6 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
   const [caption, setCaption] = useState(fallbackCaption);
   const [engine, setEngine] = useState(normalizedLanguage === normalizedSourceLanguage ? "Source Caption" : "Local Mock Caption");
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
   const [sequence, setSequence] = useState(0);
 
   useEffect(() => {
@@ -48,7 +47,6 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
     let didFallbackToTranslateApi = false;
 
     setCaption(fallbackCaption);
-    setErrorMessage("");
     setIsLoading(true);
     setSequence(0);
 
@@ -78,7 +76,6 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           if (controller.signal.aborted) return;
           setCaption(fallbackCaption);
           setEngine("Local Mock Caption");
-          setErrorMessage(error.message);
         })
         .finally(() => {
           if (!controller.signal.aborted) {
@@ -105,15 +102,15 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
       const data = JSON.parse((event as MessageEvent).data) as StreamReadyPayload;
       setEngine("Caption Queue Connected");
       setIsLoading(false);
-      setCaption(data.queuedCaptions ? fallbackCaption : "Waiting for live captions...");
+      setCaption(data.queuedCaptions ? fallbackCaption : "");
     });
     eventSource.addEventListener("caption", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as StreamCaptionPayload;
-      setCaption(data.translatedText?.trim() || data.sourceText || fallbackCaption);
-      setEngine(data.engine || "Live Translation Stream");
+      const translatedText = data.translatedText?.trim() || "";
+      setCaption(translatedText || (data.isFinal ? data.sourceText || fallbackCaption : ""));
+      setEngine(data.isFinal ? data.engine || "Live Caption Stream" : "Caption Queue");
       setSequence(data.sequence || 0);
       setIsLoading(false);
-      setErrorMessage("");
       window.dispatchEvent(new CustomEvent("platform-caption", {
         detail: {
           id: data.id,
@@ -126,15 +123,13 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
         }
       }));
     });
-    eventSource.addEventListener("caption-error", (event) => {
-      const data = JSON.parse((event as MessageEvent).data) as { message?: string };
-      setErrorMessage(data.message || "Live caption translation failed.");
+    eventSource.addEventListener("caption-error", () => {
+      setEngine("Caption Queue");
     });
     eventSource.onerror = () => {
       if (didFallbackToTranslateApi) return;
       didFallbackToTranslateApi = true;
       eventSource?.close();
-      setErrorMessage("Live caption stream disconnected. Falling back to one-shot translation.");
       requestSingleTranslation();
     };
 
@@ -154,13 +149,8 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
         </div>
         <p className="text-lg font-semibold leading-relaxed text-yellow-50 md:text-2xl">
-          {isLoading ? "Connecting live caption stream..." : caption}
+          {isLoading ? "" : caption}
         </p>
-        {errorMessage && (
-          <p className="text-xs font-medium text-rose-200">
-            API fallback: {errorMessage}
-          </p>
-        )}
       </div>
     </div>
   );

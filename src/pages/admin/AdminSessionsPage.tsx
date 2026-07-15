@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Settings2 } from "lucide-react";
 import {
@@ -25,6 +25,16 @@ const captionPlayerOptions = {
 
 const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
 
+interface TranslationErrorLog {
+  id: string;
+  createdAt: string;
+  sourceLang: string;
+  targetLang: string;
+  model: string;
+  message: string;
+  sourceTextPreview: string;
+}
+
 function toSlug(value: string) {
   return value
     .trim()
@@ -39,6 +49,7 @@ export default function AdminSessionsPage() {
   const [newDisplayDescription, setNewDisplayDescription] = useState("");
   const [newTemplateLayoutId, setNewTemplateLayoutId] = useState(mockPlatformData.layout.id);
   const [newDefaultLanguageCode, setNewDefaultLanguageCode] = useState("en");
+  const [translationErrors, setTranslationErrors] = useState<TranslationErrorLog[]>([]);
   const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
   const displayUrls = [
     ...mockDisplayUrls,
@@ -92,6 +103,25 @@ export default function AdminSessionsPage() {
   const handleDeletePlatformDisplay = (displayId: string) => {
     deleteStoredPlatformDisplay(mockPlatformData.session.slug, displayId);
     setCustomDisplays(loadStoredPlatformDisplays(mockPlatformData.session.slug));
+  };
+
+  const loadTranslationErrors = () => {
+    fetch("/api/translation-errors?limit=5")
+      .then((response) => response.json())
+      .then((data: { errors?: TranslationErrorLog[] }) => setTranslationErrors(data.errors ?? []))
+      .catch(() => setTranslationErrors([]));
+  };
+
+  useEffect(() => {
+    loadTranslationErrors();
+    const timer = window.setInterval(loadTranslationErrors, 10000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const handleClearTranslationErrors = () => {
+    fetch("/api/translation-errors", { method: "DELETE" })
+      .then(() => loadTranslationErrors())
+      .catch(() => undefined);
   };
 
   return (
@@ -255,6 +285,49 @@ export default function AdminSessionsPage() {
             </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-rose-600">Translation API Logs</p>
+            <h3 className="text-lg font-bold text-slate-900">번역 API 통신 오류</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Gemini 호출 실패나 timeout이 발생하면 fallback으로 전환하고 여기에 최근 오류를 기록합니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearTranslationErrors}
+            disabled={translationErrors.length === 0}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            로그 비우기
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {translationErrors.length === 0 ? (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+              최근 번역 API 통신 오류가 없습니다.
+            </div>
+          ) : (
+            translationErrors.map((error) => (
+              <article key={error.id} className="rounded-xl border border-rose-100 bg-rose-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-black text-rose-900">
+                    {error.sourceLang.toUpperCase()} → {error.targetLang.toUpperCase()} · {error.model}
+                  </p>
+                  <time className="text-[11px] font-bold text-rose-700">
+                    {new Date(error.createdAt).toLocaleString("ko-KR")}
+                  </time>
+                </div>
+                <p className="mt-2 text-xs font-semibold text-rose-800">{error.message}</p>
+                <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{error.sourceTextPreview}</p>
+              </article>
+            ))
+          )}
         </div>
       </div>
 

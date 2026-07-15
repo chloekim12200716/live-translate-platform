@@ -67,6 +67,7 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
       const captionEvent = event as CustomEvent<Partial<TranscriptEntry>>;
       const detail = captionEvent.detail;
       if (!detail?.id || detail.languageCode !== languageCode) return;
+      if (detail.isFinal === false && !detail.translatedText?.trim()) return;
 
       setTranscriptEntries((currentEntries) => {
         const nextEntry: TranscriptEntry = {
@@ -188,10 +189,10 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
                   <article key={entry.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">
                       <span>#{entry.sequence} · {entry.languageCode}</span>
-                      <span>{entry.isFinal ? entry.engine : "Translating"}</span>
+                      <span>{entry.engine}</span>
                     </div>
                     <p className="text-sm font-semibold leading-relaxed text-yellow-50">
-                      {entry.translatedText || entry.sourceText}
+                      {entry.translatedText}
                     </p>
                     {entry.sourceText && entry.sourceText !== entry.translatedText && (
                       <p className="mt-2 text-xs leading-relaxed text-slate-400">

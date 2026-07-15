@@ -180,6 +180,46 @@ interface TranslationResult {
   targetLang: string;
 }
 
+interface TranslationErrorLog {
+  id: string;
+  createdAt: string;
+  sourceLang: string;
+  targetLang: string;
+  model: string;
+  message: string;
+  sourceTextPreview: string;
+}
+
+const translationErrorLogs: TranslationErrorLog[] = [];
+
+function recordTranslationError({
+  error,
+  text,
+  sourceLang,
+  targetLang
+}: {
+  error: unknown;
+  text: string;
+  sourceLang: string;
+  targetLang: string;
+}) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  translationErrorLogs.unshift({
+    id: `translation-error-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    createdAt: new Date().toISOString(),
+    sourceLang,
+    targetLang,
+    model: GEMINI_MODEL,
+    message,
+    sourceTextPreview: text.slice(0, 180)
+  });
+
+  if (translationErrorLogs.length > 100) {
+    translationErrorLogs.pop();
+  }
+}
+
 async function translateText(text: string, sourceLang: string | undefined, targetLang: string | undefined): Promise<TranslationResult> {
   const normalizedSourceLang = (sourceLang || "en").toLowerCase();
   const normalizedTargetLang = (targetLang || "ko").toLowerCase();
@@ -224,7 +264,13 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
         sourceLang: normalizedSourceLang,
         targetLang: normalizedTargetLang
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      recordTranslationError({
+        error,
+        text,
+        sourceLang: normalizedSourceLang,
+        targetLang: normalizedTargetLang
+      });
       console.error("Gemini Translation Error:", error);
     }
   }
@@ -411,7 +457,7 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
     timestamp: segment.timestamp,
     speaker: segment.speaker,
     sourceText: segment.text,
-    translatedText: sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase() ? segment.text : "Translating...",
+    translatedText: sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase() ? segment.text : "",
     engine: "Live Caption Queue",
     sourceLang,
     targetLang: subscriber.targetLang,
@@ -703,6 +749,19 @@ app.post("/api/translate", async (req, res) => {
   }
 
   res.json(await translateText(text, sourceLang, targetLang));
+});
+
+app.get("/api/translation-errors", (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  res.json({
+    count: translationErrorLogs.length,
+    errors: translationErrorLogs.slice(0, limit)
+  });
+});
+
+app.delete("/api/translation-errors", (_req, res) => {
+  translationErrorLogs.splice(0, translationErrorLogs.length);
+  res.json({ status: "cleared" });
 });
 
 app.get("/api/captions/queue", (req, res) => {
