@@ -21,6 +21,7 @@ import {
   saveStoredVideoFile,
   saveStoredVideoUrl
 } from "../../data/platformVideoStorage";
+import LiveAudioTranslationTester from "../../components/platform/LiveAudioTranslationTester";
 import LiveSpeechCaptionTester from "../../components/platform/LiveSpeechCaptionTester";
 
 const captionPlayerOptions = {
@@ -333,6 +334,11 @@ export default function AdminSessionsPage() {
       </div>
 
       <LiveSpeechCaptionTester
+        sessionSlug={mockPlatformData.session.slug}
+        defaultSourceLanguageCode={mockPlatformData.session.sourceLanguageCode}
+      />
+
+      <LiveAudioTranslationTester
         sessionSlug={mockPlatformData.session.slug}
         defaultSourceLanguageCode={mockPlatformData.session.sourceLanguageCode}
       />

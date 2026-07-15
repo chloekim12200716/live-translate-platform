@@ -751,6 +751,86 @@ app.post("/api/translate", async (req, res) => {
   res.json(await translateText(text, sourceLang, targetLang));
 });
 
+app.post("/api/audio/transcribe-publish", express.raw({ type: "*/*", limit: "15mb" }), async (req, res) => {
+  const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
+  const sessionSlug = getQueryValue(req.query.sessionSlug, "main-keynote");
+  const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
+  const mimeType = req.headers["content-type"]?.split(";")[0] || "audio/webm";
+  const audioBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body ?? []);
+
+  if (!audioBuffer.length) {
+    return res.status(400).json({ error: "audio chunk is required" });
+  }
+
+  if (!aiClient) {
+    return res.status(503).json({ error: "Gemini API client is not configured" });
+  }
+
+  const prompt = `Transcribe the speech in this audio chunk.
+The expected source language is ${getLanguageLabel(sourceLang)}.
+Return only the spoken transcript text.
+If there is no clear speech, return an empty string.`;
+
+  try {
+    const response = await Promise.race([
+      aiClient.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType,
+              data: audioBuffer.toString("base64")
+            }
+          }
+        ] as any,
+        config: {
+          temperature: 0.1
+        }
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Gemini audio transcription timed out after ${TRANSLATION_TIMEOUT_MS}ms`)), TRANSLATION_TIMEOUT_MS);
+      })
+    ]);
+    const transcript = response.text?.trim() || "";
+
+    if (!transcript) {
+      return res.json({
+        status: "no-speech",
+        transcript: "",
+        engine: `Gemini ${GEMINI_MODEL} Audio`
+      });
+    }
+
+    const segment = createLiveCaptionSegment({
+      sessionSlug,
+      speaker: "Live Audio",
+      text: transcript,
+      sourceLang,
+      isFinal: true
+    });
+    publishLiveCaption(segment);
+
+    res.json({
+      status: "published",
+      transcript,
+      caption: segment,
+      engine: `Gemini ${GEMINI_MODEL} Audio`
+    });
+  } catch (error: unknown) {
+    recordTranslationError({
+      error,
+      text: `[audio chunk: ${mimeType}, ${audioBuffer.length} bytes]`,
+      sourceLang,
+      targetLang: "transcription"
+    });
+    console.error("Gemini Audio Transcription Error:", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 app.get("/api/translation-errors", (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   res.json({
