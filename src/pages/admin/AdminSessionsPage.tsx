@@ -103,25 +103,29 @@ export default function AdminSessionsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid grid-cols-1 gap-4 border-b border-slate-200 p-5 md:grid-cols-4">
-          <div>
+        <div className="grid grid-cols-1 gap-4 border-b border-slate-200 p-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
             <p className="text-[11px] font-bold uppercase text-slate-400">Event</p>
             <p className="text-sm font-semibold text-slate-900">{mockPlatformData.event.name}</p>
-          </div>
-          <div>
+            </div>
+            <div>
             <p className="text-[11px] font-bold uppercase text-slate-400">Session</p>
             <p className="text-sm font-semibold text-slate-900">{mockPlatformData.session.title}</p>
-          </div>
-          <div>
+            </div>
+            <div>
             <p className="text-[11px] font-bold uppercase text-slate-400">Slug</p>
             <p className="font-mono text-sm text-slate-700">{mockPlatformData.session.slug}</p>
+            </div>
           </div>
-          <div className="flex items-end">
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+            <p className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Primary Action</p>
+            <p className="mt-1 text-sm font-bold text-slate-900">시청자 화면 레이아웃 편집</p>
             <Link
               to={`/admin/sessions/${mockPlatformData.session.id}/layout`}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+              className="mt-3 flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-indigo-700"
             >
-              레이아웃 편집
+              레이아웃 편집 시작
             </Link>
           </div>
         </div>
@@ -212,19 +216,29 @@ export default function AdminSessionsPage() {
 
             return (
             <div key={display.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-bold text-slate-900">{display.name}</p>
-              <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-500">{display.description}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{display.name}</p>
+                  <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-500">{display.description}</p>
+                </div>
+                <Link
+                  to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
+                  className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-black text-white shadow-sm hover:bg-indigo-700"
+                >
+                  편집
+                </Link>
+              </div>
               <p className="mt-3 font-mono text-[11px] text-indigo-600">{display.layoutId}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700"
+                  className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-indigo-700 hover:bg-indigo-50"
                 >
-                  레이아웃 편집
+                  전체 편집 화면
                 </Link>
                 <Link
                   to={`/live/${mockPlatformData.session.slug}/${display.defaultLanguageCode}?layoutId=${display.layoutId}`}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-slate-700 hover:bg-slate-100"
                 >
                   미리보기
                 </Link>
