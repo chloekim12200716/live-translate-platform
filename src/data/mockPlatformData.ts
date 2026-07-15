@@ -61,7 +61,18 @@ export interface PlatformLayout {
   components: PlatformLayoutComponent[];
 }
 
+export interface PlatformDisplayTarget {
+  id: string;
+  sessionId: string;
+  name: string;
+  description: string;
+  layoutId: string;
+  defaultLanguageCode: string;
+}
+
 export interface PlatformDisplayUrl {
+  displayId: string;
+  layoutId: string;
   sessionSlug: string;
   languageCode: string;
   label: string;
@@ -151,19 +162,94 @@ export const mockPlatformLayout: PlatformLayout = {
   ]
 };
 
+export const mockPlatformLayouts: PlatformLayout[] = [
+  mockPlatformLayout,
+  {
+    ...mockPlatformLayout,
+    id: "layout-presentation-focus",
+    name: "Presentation Focus Stage",
+    components: [
+      { id: "component-slide", type: "slide", label: "Slide", x: 2, y: 2, w: 15, h: 8, visible: true, zIndex: 1 },
+      { id: "component-video", type: "video", label: "Video", x: 18, y: 2, w: 5, h: 4, visible: true, zIndex: 2 },
+      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 11, w: 18, h: 3, visible: true, zIndex: 3 },
+      { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 13, w: 21, h: 2, visible: true, zIndex: 2 }
+    ]
+  },
+  {
+    ...mockPlatformLayout,
+    id: "layout-caption-only",
+    name: "Caption Dedicated Stage",
+    components: [
+      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 4, w: 19, h: 6, visible: true, zIndex: 3 },
+      { id: "component-notice", type: "notice", label: "Notice", x: 4, y: 11, w: 17, h: 2, visible: true, zIndex: 2 }
+    ]
+  },
+  {
+    ...mockPlatformLayout,
+    id: "layout-qa-focus",
+    name: "Q&A Focus Stage",
+    components: [
+      { id: "component-video", type: "video", label: "Video", x: 2, y: 2, w: 9, h: 5, visible: true, zIndex: 1 },
+      { id: "component-slide", type: "slide", label: "Slide", x: 11, y: 2, w: 8, h: 5, visible: true, zIndex: 1 },
+      { id: "component-qa", type: "qa", label: "Q&A", x: 19, y: 2, w: 5, h: 8, visible: true, zIndex: 2 },
+      { id: "component-caption", type: "caption", label: "Caption", x: 2, y: 9, w: 16, h: 3, visible: true, zIndex: 3 },
+      { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 12, w: 21, h: 2, visible: true, zIndex: 2 }
+    ]
+  }
+];
+
+export const mockPlatformDisplays: PlatformDisplayTarget[] = [
+  {
+    id: "main-stage",
+    sessionId: mockPlatformSession.id,
+    name: "강연 메인 송출",
+    description: "영상, 슬라이드, 자막, Q&A를 함께 보여주는 기본 행사 화면",
+    layoutId: "layout-default-live-stage",
+    defaultLanguageCode: "en"
+  },
+  {
+    id: "presentation-stage",
+    sessionId: mockPlatformSession.id,
+    name: "PPT 중심 송출",
+    description: "발표 자료를 크게 보여주고 영상과 자막을 보조로 배치",
+    layoutId: "layout-presentation-focus",
+    defaultLanguageCode: "en"
+  },
+  {
+    id: "caption-stage",
+    sessionId: mockPlatformSession.id,
+    name: "자막 전용 송출",
+    description: "현장 스크린이나 접근성 화면을 위한 큰 자막 중심 화면",
+    layoutId: "layout-caption-only",
+    defaultLanguageCode: "ko"
+  },
+  {
+    id: "qa-stage",
+    sessionId: mockPlatformSession.id,
+    name: "Q&A 포함 송출",
+    description: "청중 질문 영역을 강조하는 상호작용형 화면",
+    layoutId: "layout-qa-focus",
+    defaultLanguageCode: "en"
+  }
+];
+
 export const mockDisplayUrls: PlatformDisplayUrl[] = [
-  { sessionSlug: mockPlatformSession.slug, languageCode: "ar", label: "Arabic", path: `/live/${mockPlatformSession.slug}/ar` },
-  { sessionSlug: mockPlatformSession.slug, languageCode: "zh", label: "Chinese", path: `/live/${mockPlatformSession.slug}/zh` },
-  { sessionSlug: mockPlatformSession.slug, languageCode: "en", label: "English", path: `/live/${mockPlatformSession.slug}/en` },
-  { sessionSlug: mockPlatformSession.slug, languageCode: "fr", label: "French", path: `/live/${mockPlatformSession.slug}/fr` },
-  { sessionSlug: mockPlatformSession.slug, languageCode: "ru", label: "Russian", path: `/live/${mockPlatformSession.slug}/ru` },
-  { sessionSlug: mockPlatformSession.slug, languageCode: "es", label: "Spanish", path: `/live/${mockPlatformSession.slug}/es` }
+  ...mockPlatformDisplays.flatMap((display) => [
+    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "ar", label: `${display.name} · Arabic`, path: `/live/${mockPlatformSession.slug}/ar?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "zh", label: `${display.name} · Chinese`, path: `/live/${mockPlatformSession.slug}/zh?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "en", label: `${display.name} · English`, path: `/live/${mockPlatformSession.slug}/en?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "fr", label: `${display.name} · French`, path: `/live/${mockPlatformSession.slug}/fr?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "ru", label: `${display.name} · Russian`, path: `/live/${mockPlatformSession.slug}/ru?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "es", label: `${display.name} · Spanish`, path: `/live/${mockPlatformSession.slug}/es?layoutId=${display.layoutId}` }
+  ])
 ];
 
 export const mockPlatformData = {
   event: mockPlatformEvent,
   session: mockPlatformSession,
   layout: mockPlatformLayout,
+  layouts: mockPlatformLayouts,
+  displays: mockPlatformDisplays,
   components: mockPlatformLayout.components,
   displayUrls: mockDisplayUrls
 };

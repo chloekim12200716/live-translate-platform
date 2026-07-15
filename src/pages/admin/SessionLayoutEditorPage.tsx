@@ -1,21 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
-  BadgeInfo,
-  Captions,
   Clapperboard,
   Grid3X3,
   Image,
-  Layers3,
-  MessageSquareText,
-  MonitorPlay,
-  Presentation,
   Radio,
   Settings2,
   Sparkles
 } from "lucide-react";
 import {
   mockPlatformLayout,
+  mockPlatformLayouts,
+  mockPlatformDisplays,
   mockPlatformSession,
   PlatformComponentType,
   PlatformLayoutComponent
@@ -37,19 +33,14 @@ import {
   snapLayoutUnit
 } from "../../utils/layoutEditor";
 
-const builderMenuItems = ["화면 구성", "세션 관리", "자막 설정", "Q&A 관리", "공지/배너 관리", "설정"];
-const componentGuideItems = [
-  { type: "video", title: "영상 (Video)", description: "연사/발표자 영상을 보여주는 영역", icon: MonitorPlay, color: "text-violet-600 bg-violet-50" },
-  { type: "slide", title: "PPT/자료 (Slides)", description: "발표 자료와 이미지 슬라이드 영역", icon: Presentation, color: "text-sky-600 bg-sky-50" },
-  { type: "caption", title: "실시간 자막", description: "AI가 번역한 자막을 표시하는 영역", icon: Captions, color: "text-emerald-600 bg-emerald-50" },
-  { type: "qa", title: "Q&A / 채팅", description: "청중 질문과 답변을 보여주는 영역", icon: MessageSquareText, color: "text-orange-600 bg-orange-50" },
-  { type: "notice", title: "세션 정보/공지", description: "행사 정보와 안내 문구 영역", icon: BadgeInfo, color: "text-pink-600 bg-pink-50" }
-] as const;
-
 export default function SessionLayoutEditorPage() {
   const { sessionId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isKnownSession = sessionId === mockPlatformSession.id;
-  const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformSession.slug, mockPlatformLayout));
+  const selectedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
+  const selectedBaseLayout = mockPlatformLayouts.find((layout) => layout.id === selectedLayoutId) ?? mockPlatformLayout;
+  const selectedDisplay = mockPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
+  const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isBackgroundDragActive, setIsBackgroundDragActive] = useState(false);
@@ -77,6 +68,17 @@ export default function SessionLayoutEditorPage() {
     cellHeight: number;
   } | null>(null);
   const selectedComponent = layout.components.find((component) => component.id === selectedComponentId) ?? layout.components[0];
+
+  useEffect(() => {
+    const nextLayout = loadStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id);
+    setLayout(nextLayout);
+    setSelectedComponentId(nextLayout.components[0]?.id ?? "");
+    setSavedAt(null);
+  }, [selectedBaseLayout.id]);
+
+  const handleLayoutSelect = (layoutId: string) => {
+    setSearchParams({ layoutId });
+  };
 
   const updateComponent = (componentId: string, updates: Partial<PlatformLayoutComponent>) => {
     setLayout((currentLayout) => {
@@ -269,14 +271,14 @@ export default function SessionLayoutEditorPage() {
   };
 
   const handleSaveLayout = () => {
-    saveStoredLayout(mockPlatformSession.slug, layout);
+    saveStoredLayout(mockPlatformSession.slug, layout, selectedBaseLayout.id);
     setSavedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
   };
 
   const handleResetLayout = () => {
-    clearStoredLayout(mockPlatformSession.slug);
-    setLayout(mockPlatformLayout);
-    setSelectedComponentId(mockPlatformLayout.components[0]?.id ?? "");
+    clearStoredLayout(mockPlatformSession.slug, selectedBaseLayout.id);
+    setLayout(selectedBaseLayout);
+    setSelectedComponentId(selectedBaseLayout.components[0]?.id ?? "");
     setSavedAt(null);
   };
 
@@ -398,12 +400,46 @@ export default function SessionLayoutEditorPage() {
               저장
             </button>
             <Link
-              to={`/live/${mockPlatformSession.slug}/en`}
+              to={`/live/${mockPlatformSession.slug}/en?layoutId=${selectedBaseLayout.id}`}
               onClick={handleSaveLayout}
               className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
             >
               미리보기
             </Link>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">출력 플랫폼 / 레이아웃 선택</p>
+              <h3 className="mt-1 text-sm font-black text-slate-900">
+                {selectedDisplay?.name ?? selectedBaseLayout.name}
+              </h3>
+            </div>
+            <p className="font-mono text-[11px] text-slate-500">{selectedBaseLayout.id}</p>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {mockPlatformDisplays.map((display) => {
+              const isSelected = display.layoutId === selectedBaseLayout.id;
+
+              return (
+                <button
+                  key={display.id}
+                  type="button"
+                  onClick={() => handleLayoutSelect(display.layoutId)}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    isSelected
+                      ? "border-indigo-300 bg-white shadow-sm ring-2 ring-indigo-100"
+                      : "border-slate-200 bg-white/70 hover:border-slate-300 hover:bg-white"
+                  }`}
+                >
+                  <p className="text-xs font-black text-slate-900">{display.name}</p>
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{display.description}</p>
+                  <p className="mt-3 font-mono text-[10px] text-indigo-600">{display.layoutId}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -427,49 +463,7 @@ export default function SessionLayoutEditorPage() {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_360px]">
-        <aside className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-white shadow-sm">
-          <div className="border-b border-white/10 p-5">
-            <div className="flex items-center gap-2">
-              <Layers3 className="h-4 w-4 text-cyan-300" />
-              <h3 className="text-sm font-black">대시보드</h3>
-            </div>
-            <p className="mt-1 text-xs leading-relaxed text-slate-400">화면 구성과 실시간 송출 요소를 관리합니다.</p>
-          </div>
-
-          <nav className="space-y-1 border-b border-white/10 p-3">
-            {builderMenuItems.map((item, index) => (
-              <button
-                key={item}
-                type="button"
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-bold transition ${
-                  index === 0 ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-white/10"
-                }`}
-              >
-                {item}
-                {index === 0 && <span className="h-1.5 w-1.5 rounded-full bg-cyan-200" />}
-              </button>
-            ))}
-          </nav>
-
-          <div className="space-y-2 p-4">
-            <p className="px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">주요 컴포넌트</p>
-            {componentGuideItems.map(({ title, description, icon: Icon, color }) => (
-              <div key={title} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                <div className="flex items-start gap-3">
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color}`}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-black text-white">{title}</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{description}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
-
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

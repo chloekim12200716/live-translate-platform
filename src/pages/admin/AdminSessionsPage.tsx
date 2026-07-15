@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ExternalLink, Settings2 } from "lucide-react";
 import {
   mockDisplayUrls,
+  mockPlatformDisplays,
   mockPlatformData
 } from "../../data/mockPlatformData";
 
@@ -57,6 +58,42 @@ export default function AdminSessionsPage() {
               <p className="text-xs font-bold text-slate-900">{displayUrl.label}</p>
               <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
             </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Output Platforms</p>
+            <h3 className="text-lg font-bold text-slate-900">플랫폼별 레이아웃</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              같은 세션이라도 메인 송출, PPT 중심, 자막 전용, Q&A 포함 화면을 서로 다른 레이아웃으로 관리합니다.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {mockPlatformDisplays.map((display) => (
+            <div key={display.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-bold text-slate-900">{display.name}</p>
+              <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-500">{display.description}</p>
+              <p className="mt-3 font-mono text-[11px] text-indigo-600">{display.layoutId}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700"
+                >
+                  레이아웃 편집
+                </Link>
+                <Link
+                  to={`/live/${mockPlatformData.session.slug}/${display.defaultLanguageCode}?layoutId=${display.layoutId}`}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  미리보기
+                </Link>
+              </div>
+            </div>
           ))}
         </div>
       </div>

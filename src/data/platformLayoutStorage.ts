@@ -1,7 +1,13 @@
 import { PlatformLayout } from "./mockPlatformData";
 
+const legacyDefaultLayoutId = "layout-default-live-stage";
+
 export function getLayoutStorageKey(sessionSlug: string) {
   return `layout:${sessionSlug}`;
+}
+
+export function getPlatformLayoutStorageKey(sessionSlug: string, layoutId: string) {
+  return `layout:${sessionSlug}:${layoutId}`;
 }
 
 function normalizeLayout(layout: PlatformLayout): PlatformLayout {
@@ -20,10 +26,12 @@ function normalizeLayout(layout: PlatformLayout): PlatformLayout {
   };
 }
 
-export function loadStoredLayout(sessionSlug: string, fallbackLayout: PlatformLayout): PlatformLayout {
+export function loadStoredLayout(sessionSlug: string, fallbackLayout: PlatformLayout, layoutId = fallbackLayout.id): PlatformLayout {
   if (typeof window === "undefined") return fallbackLayout;
 
-  const rawLayout = window.localStorage.getItem(getLayoutStorageKey(sessionSlug));
+  const rawPlatformLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(sessionSlug, layoutId));
+  const rawLegacyLayout = layoutId === legacyDefaultLayoutId ? window.localStorage.getItem(getLayoutStorageKey(sessionSlug)) : null;
+  const rawLayout = rawPlatformLayout ?? rawLegacyLayout;
   if (!rawLayout) return normalizeLayout(fallbackLayout);
 
   try {
@@ -34,10 +42,15 @@ export function loadStoredLayout(sessionSlug: string, fallbackLayout: PlatformLa
   }
 }
 
-export function saveStoredLayout(sessionSlug: string, layout: PlatformLayout) {
-  window.localStorage.setItem(getLayoutStorageKey(sessionSlug), JSON.stringify(normalizeLayout(layout)));
+export function saveStoredLayout(sessionSlug: string, layout: PlatformLayout, layoutId = layout.id) {
+  window.localStorage.setItem(getPlatformLayoutStorageKey(sessionSlug, layoutId), JSON.stringify(normalizeLayout(layout)));
 }
 
-export function clearStoredLayout(sessionSlug: string) {
+export function clearStoredLayout(sessionSlug: string, layoutId?: string) {
+  if (layoutId) {
+    window.localStorage.removeItem(getPlatformLayoutStorageKey(sessionSlug, layoutId));
+    return;
+  }
+
   window.localStorage.removeItem(getLayoutStorageKey(sessionSlug));
 }

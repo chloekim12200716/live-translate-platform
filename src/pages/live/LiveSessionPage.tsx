@@ -1,17 +1,21 @@
-import React, { useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import React from "react";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import DisplayRenderer from "../../components/platform/DisplayRenderer";
 import {
   mockPlatformData,
   mockPlatformLayout,
+  mockPlatformLayouts,
   mockPlatformSession
 } from "../../data/mockPlatformData";
 import { loadStoredLayout } from "../../data/platformLayoutStorage";
 
 export default function LiveSessionPage() {
   const { sessionSlug, languageCode } = useParams();
+  const [searchParams] = useSearchParams();
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
-  const [layout] = useState(() => loadStoredLayout(mockPlatformSession.slug, mockPlatformLayout));
+  const requestedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
+  const fallbackLayout = mockPlatformLayouts.find((layout) => layout.id === requestedLayoutId) ?? mockPlatformLayout;
+  const layout = loadStoredLayout(mockPlatformSession.slug, fallbackLayout, fallbackLayout.id);
 
   if (sessionSlug !== mockPlatformSession.slug) {
     return <Navigate to={`/live/${mockPlatformSession.slug}/${resolvedLanguage}`} replace />;
