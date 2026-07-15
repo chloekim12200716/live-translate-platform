@@ -82,12 +82,14 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
         const existingIndex = currentEntries.findIndex((entry) => entry.id === nextEntry.id);
 
         if (existingIndex === -1) {
-          return [...currentEntries, nextEntry].slice(-100);
+          return [...currentEntries, nextEntry]
+            .sort((firstEntry, secondEntry) => firstEntry.sequence - secondEntry.sequence)
+            .slice(-100);
         }
 
         const updatedEntries = [...currentEntries];
         updatedEntries[existingIndex] = nextEntry;
-        return updatedEntries;
+        return updatedEntries.sort((firstEntry, secondEntry) => firstEntry.sequence - secondEntry.sequence);
       });
     };
 

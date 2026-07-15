@@ -852,6 +852,7 @@ app.get("/api/captions/stream", (req, res) => {
   const targetLang = getQueryValue(req.query.targetLang, "ko").toLowerCase();
   const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
   const replayLatest = getQueryValue(req.query.replayLatest, "true") !== "false";
+  const replayLimit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.replayLimit, "50")) || 50));
   const subscriberId = `subscriber-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   let isClosed = false;
 
@@ -893,13 +894,11 @@ app.get("/api/captions/stream", (req, res) => {
   });
 
   if (replayLatest) {
-    const latestSegment = liveCaptionQueue
+    const replaySegments = liveCaptionQueue
       .filter((segment) => segment.sessionSlug === sessionSlug)
-      .at(-1);
+      .slice(-replayLimit);
 
-    if (latestSegment) {
-      writeLiveCaptionEvent(subscriber, latestSegment);
-    }
+    replaySegments.forEach((segment) => writeLiveCaptionEvent(subscriber, segment));
   }
 });
 

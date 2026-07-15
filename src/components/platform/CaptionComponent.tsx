@@ -93,7 +93,8 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
       sessionSlug,
       sourceLang: normalizedSourceLanguage,
       targetLang: normalizedLanguage,
-      replayLatest: "true"
+      replayLatest: "true",
+      replayLimit: "50"
     });
 
     setEngine("Live Translation Stream");
