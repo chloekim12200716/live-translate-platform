@@ -1,8 +1,10 @@
 import express from "express";
 import path from "path";
+import { createServer as createHttpServer, type Server as HttpServer } from "http";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { WebSocket, WebSocketServer } from "ws";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -16,6 +18,7 @@ app.use(express.json());
 let aiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-live-2.5-flash-preview";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 
 const translationLanguageLabels: Record<string, string> = {
@@ -982,6 +985,257 @@ app.get("/api/captions/stream", (req, res) => {
   }
 });
 
+interface GeminiLiveSessionLike {
+  sendRealtimeInput: (params: {
+    audio?: { data: string; mimeType: string };
+    audioStreamEnd?: boolean;
+    text?: string;
+  }) => void;
+  close: () => void;
+}
+
+interface LiveServerMessageLike {
+  serverContent?: {
+    modelTurn?: {
+      parts?: Array<{ text?: string }>;
+    };
+    turnComplete?: boolean;
+  };
+}
+
+function sendAudioLiveSocketMessage(socket: WebSocket, payload: unknown) {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify(payload));
+}
+
+function extractLiveText(message: LiveServerMessageLike) {
+  return message.serverContent?.modelTurn?.parts
+    ?.map((part) => part.text ?? "")
+    .join("")
+    .trim() ?? "";
+}
+
+function createLiveCaptionPublisher({
+  socket,
+  sessionSlug,
+  sourceLang
+}: {
+  socket: WebSocket;
+  sessionSlug: string;
+  sourceLang: string;
+}) {
+  let lastPublishedText = "";
+
+  return (text: string, engine = `Gemini ${GEMINI_LIVE_MODEL} Live`) => {
+    const normalizedText = text.replace(/\s+/g, " ").trim();
+    if (normalizedText.length < 2 || normalizedText === lastPublishedText) return;
+
+    lastPublishedText = normalizedText;
+    const segment = createLiveCaptionSegment({
+      sessionSlug,
+      speaker: "Live Audio",
+      text: normalizedText,
+      sourceLang,
+      isFinal: true
+    });
+    publishLiveCaption(segment);
+    sendAudioLiveSocketMessage(socket, {
+      type: "caption",
+      transcript: normalizedText,
+      sequence: segment.sequence,
+      engine
+    });
+  };
+}
+
+function installAudioLiveWebSocketServer(server: HttpServer) {
+  const audioLiveWss = new WebSocketServer({ noServer: true });
+
+  audioLiveWss.on("connection", (socket, request) => {
+    const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
+    const sessionSlug = getCaptionSessionKey(requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
+    const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "en").toLowerCase();
+    const mimeType = requestUrl.searchParams.get("mimeType") || "audio/webm;codecs=opus";
+    const pendingFrames: Buffer[] = [];
+    let liveSession: GeminiLiveSessionLike | null = null;
+    let isClosed = false;
+    const publishLiveTranscript = createLiveCaptionPublisher({ socket, sessionSlug, sourceLang });
+
+    const flushPendingFrames = () => {
+      if (!liveSession) return;
+
+      while (pendingFrames.length > 0) {
+        const frame = pendingFrames.shift();
+        if (!frame) continue;
+        liveSession.sendRealtimeInput({
+          audio: {
+            data: frame.toString("base64"),
+            mimeType
+          }
+        });
+      }
+    };
+
+    const connectLiveSession = async () => {
+      if (!aiClient) {
+        sendAudioLiveSocketMessage(socket, {
+          type: "error",
+          message: "Gemini API client is not configured."
+        });
+        socket.close(1011, "Gemini API client is not configured");
+        return;
+      }
+
+      try {
+        sendAudioLiveSocketMessage(socket, {
+          type: "connecting",
+          model: GEMINI_LIVE_MODEL
+        });
+
+        liveSession = await (aiClient as any).live.connect({
+          model: GEMINI_LIVE_MODEL,
+          config: {
+            responseModalities: ["TEXT"],
+            systemInstruction: `You are a real-time medical conference transcription engine.
+Listen to the incoming ${getLanguageLabel(sourceLang)} audio and output only concise spoken transcript text in ${getLanguageLabel(sourceLang)}.
+Do not translate. Do not add explanations. Emit only words that were spoken.`
+          },
+          callbacks: {
+            onopen: () => {
+              sendAudioLiveSocketMessage(socket, {
+                type: "open",
+                model: GEMINI_LIVE_MODEL
+              });
+            },
+            onmessage: (message: LiveServerMessageLike) => {
+              const text = extractLiveText(message);
+              if (text) {
+                publishLiveTranscript(text);
+              }
+            },
+            onerror: (error: Error) => {
+              recordTranslationError({
+                error,
+                text: "[Gemini Live audio session]",
+                sourceLang,
+                targetLang: "live-transcription"
+              });
+              sendAudioLiveSocketMessage(socket, {
+                type: "error",
+                message: error.message
+              });
+            },
+            onclose: () => {
+              sendAudioLiveSocketMessage(socket, {
+                type: "closed"
+              });
+            }
+          }
+        });
+
+        if (isClosed) {
+          liveSession.close();
+          return;
+        }
+
+        sendAudioLiveSocketMessage(socket, {
+          type: "ready",
+          sessionSlug,
+          sourceLang,
+          mimeType
+        });
+        flushPendingFrames();
+      } catch (error) {
+        recordTranslationError({
+          error,
+          text: "[Gemini Live audio connect]",
+          sourceLang,
+          targetLang: "live-transcription"
+        });
+        sendAudioLiveSocketMessage(socket, {
+          type: "error",
+          message: error instanceof Error ? error.message : String(error)
+        });
+        socket.close(1011, "Gemini Live connection failed");
+      }
+    };
+
+    void connectLiveSession();
+
+    socket.on("message", (data, isBinary) => {
+      if (!isBinary) {
+        try {
+          const message = JSON.parse(data.toString()) as { type?: string; text?: string };
+          if (message.type === "text" && message.text) {
+            publishLiveTranscript(message.text, "Client Text Frame");
+          }
+          if (message.type === "end") {
+            liveSession?.sendRealtimeInput({ audioStreamEnd: true });
+          }
+        } catch {
+          sendAudioLiveSocketMessage(socket, {
+            type: "error",
+            message: "Invalid websocket control message."
+          });
+        }
+        return;
+      }
+
+      const frame = Buffer.isBuffer(data)
+        ? data
+        : Array.isArray(data)
+          ? Buffer.concat(data)
+          : Buffer.from(data);
+
+      if (!frame.length) return;
+      if (!liveSession) {
+        pendingFrames.push(frame);
+        if (pendingFrames.length > 80) {
+          pendingFrames.shift();
+        }
+        return;
+      }
+
+      liveSession.sendRealtimeInput({
+        audio: {
+          data: frame.toString("base64"),
+          mimeType
+        }
+      });
+    });
+
+    socket.on("close", () => {
+      isClosed = true;
+      try {
+        liveSession?.sendRealtimeInput({ audioStreamEnd: true });
+      } catch {
+        // Closing should not fail the HTTP server.
+      }
+      liveSession?.close();
+    });
+
+    socket.on("error", (error) => {
+      recordTranslationError({
+        error,
+        text: "[Browser audio websocket]",
+        sourceLang,
+        targetLang: "live-transcription"
+      });
+    });
+  });
+
+  server.on("upgrade", (request, socket, head) => {
+    const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
+    if (requestUrl.pathname !== "/api/audio/live") {
+      return;
+    }
+
+    audioLiveWss.handleUpgrade(request, socket, head, (webSocket) => {
+      audioLiveWss.emit("connection", webSocket, request);
+    });
+  });
+}
+
 // Gemini-Powered Lecture Summarizer endpoint
 app.post("/api/summarize", async (req, res) => {
   const transcript = appState.subtitles.map(s => `[${s.speaker}] ${s.original} -> ${s.translated}`).join("\n");
@@ -1050,7 +1304,9 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = createHttpServer(app);
+  installAudioLiveWebSocketServer(httpServer);
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }

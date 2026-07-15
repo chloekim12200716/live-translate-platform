@@ -16,14 +16,27 @@ const sourceLanguageOptions = [
   { code: "ru", label: "Russian" }
 ];
 
-function getSupportedAudioMimeType() {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4"
-  ];
+function float32ToPcm16Buffer(input: Float32Array) {
+  const buffer = new ArrayBuffer(input.length * 2);
+  const view = new DataView(buffer);
 
-  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, input[index]));
+    view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+
+  return buffer;
+}
+
+function createLiveAudioWebSocketUrl(sessionSlug: string, sourceLanguageCode: string) {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const params = new URLSearchParams({
+    sessionSlug,
+    sourceLang: sourceLanguageCode,
+    mimeType: "audio/pcm;rate=16000"
+  });
+
+  return `${protocol}//${window.location.host}/api/audio/live?${params.toString()}`;
 }
 
 export default function LiveAudioTranslationTester({
@@ -35,57 +48,34 @@ export default function LiveAudioTranslationTester({
   const [statusMessage, setStatusMessage] = useState("");
   const [latestTranscript, setLatestTranscript] = useState("");
   const [publishedCount, setPublishedCount] = useState(0);
-  const [chunkSeconds, setChunkSeconds] = useState(5);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const [sentFrames, setSentFrames] = useState(0);
   const streamRef = useRef<MediaStream | null>(null);
-  const isPostingRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const silenceGainRef = useRef<GainNode | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
 
-  const stopCapture = () => {
-    recorderRef.current?.stop();
-    recorderRef.current = null;
+  const cleanupAudio = () => {
+    processorRef.current?.disconnect();
+    sourceRef.current?.disconnect();
+    silenceGainRef.current?.disconnect();
+    void audioContextRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    processorRef.current = null;
+    sourceRef.current = null;
+    silenceGainRef.current = null;
+    audioContextRef.current = null;
     streamRef.current = null;
-    isPostingRef.current = false;
-    setIsCapturing(false);
-    setStatusMessage("오디오 캡처 중지됨");
   };
 
-  const postAudioChunk = async (blob: Blob) => {
-    if (!blob.size || isPostingRef.current) return;
-
-    isPostingRef.current = true;
-    setStatusMessage("오디오 전사 요청 중");
-
-    try {
-      const params = new URLSearchParams({
-        sessionSlug,
-        sourceLang: sourceLanguageCode
-      });
-      const response = await fetch(`/api/audio/transcribe-publish?${params.toString()}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": blob.type || "audio/webm"
-        },
-        body: blob
-      });
-      const data = await response.json() as { status?: string; transcript?: string; error?: string };
-
-      if (!response.ok) {
-        throw new Error(data.error || `Audio transcription failed (${response.status})`);
-      }
-
-      if (data.status === "published" && data.transcript) {
-        setLatestTranscript(data.transcript);
-        setPublishedCount((currentCount) => currentCount + 1);
-        setStatusMessage("caption queue로 전송됨");
-      } else {
-        setStatusMessage("감지된 음성이 없습니다");
-      }
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      isPostingRef.current = false;
-    }
+  const stopCapture = () => {
+    socketRef.current?.send(JSON.stringify({ type: "end" }));
+    socketRef.current?.close();
+    socketRef.current = null;
+    cleanupAudio();
+    setIsCapturing(false);
+    setStatusMessage("오디오 캡처 중지됨");
   };
 
   const startTabAudioCapture = async () => {
@@ -97,7 +87,11 @@ export default function LiveAudioTranslationTester({
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
       });
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length === 0) {
@@ -106,33 +100,75 @@ export default function LiveAudioTranslationTester({
         return;
       }
 
-      const audioOnlyStream = new MediaStream(audioTracks);
-      const mimeType = getSupportedAudioMimeType();
-      const recorder = new MediaRecorder(audioOnlyStream, mimeType ? { mimeType } : undefined);
+      const socket = new WebSocket(createLiveAudioWebSocketUrl(sessionSlug, sourceLanguageCode));
+      socket.binaryType = "arraybuffer";
+      socket.onopen = () => {
+        setStatusMessage("Live API WebSocket 연결 중");
+      };
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data as string) as {
+          type?: string;
+          message?: string;
+          transcript?: string;
+          sequence?: number;
+        };
 
-      stream.getVideoTracks().forEach((track) => {
+        if (data.type === "ready") {
+          setStatusMessage("오디오 frame 전송 중");
+        } else if (data.type === "caption" && data.transcript) {
+          setLatestTranscript(data.transcript);
+          setPublishedCount((currentCount) => currentCount + 1);
+          setStatusMessage(`caption queue 전송됨 #${data.sequence ?? ""}`.trim());
+        } else if (data.type === "error") {
+          setStatusMessage(data.message || "Live API WebSocket 오류");
+        } else if (data.type === "closed") {
+          setStatusMessage("Live API 세션 종료됨");
+        }
+      };
+      socket.onerror = () => {
+        setStatusMessage("Live API WebSocket 연결 오류");
+      };
+      socket.onclose = () => {
+        cleanupAudio();
+        setIsCapturing(false);
+      };
+
+      const audioStream = new MediaStream(audioTracks);
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(audioStream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      const silenceGain = audioContext.createGain();
+      silenceGain.gain.value = 0;
+
+      processor.onaudioprocess = (event) => {
+        if (socket.readyState !== WebSocket.OPEN) return;
+        const input = event.inputBuffer.getChannelData(0);
+        socket.send(float32ToPcm16Buffer(input));
+        setSentFrames((currentFrames) => currentFrames + 1);
+      };
+
+      source.connect(processor);
+      processor.connect(silenceGain);
+      silenceGain.connect(audioContext.destination);
+      stream.getTracks().forEach((track) => {
         track.onended = stopCapture;
       });
-      audioTracks.forEach((track) => {
-        track.onended = stopCapture;
-      });
-      recorder.ondataavailable = (event) => {
-        void postAudioChunk(event.data);
-      };
-      recorder.onerror = () => {
-        setStatusMessage("오디오 녹음 중 오류가 발생했습니다.");
-      };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
-      };
 
       streamRef.current = stream;
-      recorderRef.current = recorder;
-      recorder.start(chunkSeconds * 1000);
+      audioContextRef.current = audioContext;
+      sourceRef.current = source;
+      processorRef.current = processor;
+      silenceGainRef.current = silenceGain;
+      socketRef.current = socket;
       setIsCapturing(true);
+      setSentFrames(0);
       setLatestTranscript("");
-      setStatusMessage("탭/시스템 오디오 캡처 중");
+      setStatusMessage("탭/시스템 오디오 캡처 준비 중");
     } catch (error) {
+      cleanupAudio();
+      socketRef.current?.close();
+      socketRef.current = null;
+      setIsCapturing(false);
       setStatusMessage(error instanceof Error ? error.message : String(error));
     }
   };
@@ -143,19 +179,19 @@ export default function LiveAudioTranslationTester({
         <div>
           <div className="flex items-center gap-2">
             <Radio className="h-4 w-4 text-emerald-600" />
-            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Direct Audio Translation Test</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">WebSocket Live Audio</p>
           </div>
-          <h3 className="mt-1 text-lg font-bold text-slate-900">오디오 직접 전사/번역 테스트</h3>
+          <h3 className="mt-1 text-lg font-bold text-slate-900">저지연 오디오 전사/번역 테스트</h3>
           <p className="mt-1 text-sm text-slate-500">
-            YouTube 탭 또는 라이브 방송 화면의 오디오를 캡처해 Gemini 전사 후 caption queue로 전송합니다.
+            YouTube 탭 또는 라이브 방송 오디오를 16kHz PCM frame으로 서버에 보내 Gemini Live API로 전사합니다.
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
-          published {publishedCount}
+          published {publishedCount} / frames {sentFrames}
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[170px_150px_minmax(0,1fr)_auto]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[170px_minmax(0,1fr)_auto]">
         <label className="text-xs font-bold text-slate-700">
           입력 언어
           <select
@@ -172,22 +208,8 @@ export default function LiveAudioTranslationTester({
           </select>
         </label>
 
-        <label className="text-xs font-bold text-slate-700">
-          chunk
-          <select
-            value={chunkSeconds}
-            onChange={(event) => setChunkSeconds(Number(event.target.value))}
-            disabled={isCapturing}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-400 disabled:opacity-60"
-          >
-            <option value={3}>3초</option>
-            <option value={5}>5초</option>
-            <option value={8}>8초</option>
-          </select>
-        </label>
-
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Latest Transcript</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Latest Live Transcript</p>
           <p className="mt-2 min-h-10 text-sm font-semibold leading-relaxed text-slate-900">
             {latestTranscript || "전사 결과 대기 중"}
           </p>
@@ -205,14 +227,14 @@ export default function LiveAudioTranslationTester({
             }`}
           >
             {isCapturing ? <Square className="h-4 w-4" /> : <ScreenShare className="h-4 w-4" />}
-            {isCapturing ? "캡처 중지" : "탭 오디오 캡처"}
+            {isCapturing ? "캡처 중지" : "WebSocket 캡처 시작"}
           </button>
         </div>
       </div>
 
       <p className="mt-3 text-xs leading-relaxed text-slate-500">
-        Chrome에서 YouTube 탭을 선택하고 `Share tab audio`를 켜야 합니다. 이 테스트는 실시간 파이프라인 검증용이며,
-        chunk 길이만큼 전사 지연이 발생합니다.
+        Chrome에서 YouTube 탭을 선택하고 `Share tab audio`를 켜세요. 이 경로는 HTTP chunk보다 지연이 낮지만,
+        실제 응답 시간은 Gemini Live API 상태와 네트워크에 영향을 받습니다.
       </p>
     </div>
   );
