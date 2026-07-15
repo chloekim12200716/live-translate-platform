@@ -634,6 +634,13 @@ export default function SessionLayoutEditorPage() {
         </main>
 
         <div className="space-y-4">
+          <ComponentListPanel
+            components={layout.components}
+            selectedComponentId={selectedComponentId}
+            onAddComponent={handleAddComponent}
+            onSelectComponent={setSelectedComponentId}
+            onDeleteComponent={handleDeleteComponent}
+          />
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-indigo-600" />
@@ -652,14 +659,6 @@ export default function SessionLayoutEditorPage() {
           />
         </div>
       </div>
-
-      <ComponentListPanel
-        components={layout.components}
-        selectedComponentId={selectedComponentId}
-        onAddComponent={handleAddComponent}
-        onSelectComponent={setSelectedComponentId}
-        onDeleteComponent={handleDeleteComponent}
-      />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
