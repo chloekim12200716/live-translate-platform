@@ -7,14 +7,16 @@ import {
   mockPlatformLayouts,
   mockPlatformSession
 } from "../../data/mockPlatformData";
-import { loadStoredLayout } from "../../data/platformLayoutStorage";
+import { loadStoredLayout, loadStoredLayoutById } from "../../data/platformLayoutStorage";
 
 export default function LiveSessionPage() {
   const { sessionSlug, languageCode } = useParams();
   const [searchParams] = useSearchParams();
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
   const requestedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
-  const fallbackLayout = mockPlatformLayouts.find((layout) => layout.id === requestedLayoutId) ?? mockPlatformLayout;
+  const fallbackLayout = mockPlatformLayouts.find((layout) => layout.id === requestedLayoutId)
+    ?? loadStoredLayoutById(mockPlatformSession.slug, requestedLayoutId)
+    ?? mockPlatformLayout;
   const layout = loadStoredLayout(mockPlatformSession.slug, fallbackLayout, fallbackLayout.id);
 
   if (sessionSlug !== mockPlatformSession.slug) {

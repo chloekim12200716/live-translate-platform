@@ -1,4 +1,4 @@
-import { PlatformLayout } from "./mockPlatformData";
+import { PlatformDisplayTarget, PlatformLayout } from "./mockPlatformData";
 
 const legacyDefaultLayoutId = "layout-default-live-stage";
 
@@ -8,6 +8,10 @@ export function getLayoutStorageKey(sessionSlug: string) {
 
 export function getPlatformLayoutStorageKey(sessionSlug: string, layoutId: string) {
   return `layout:${sessionSlug}:${layoutId}`;
+}
+
+export function getPlatformDisplaysStorageKey(sessionSlug: string) {
+  return `platformDisplays:${sessionSlug}`;
 }
 
 function normalizeLayout(layout: PlatformLayout): PlatformLayout {
@@ -42,6 +46,20 @@ export function loadStoredLayout(sessionSlug: string, fallbackLayout: PlatformLa
   }
 }
 
+export function loadStoredLayoutById(sessionSlug: string, layoutId: string): PlatformLayout | null {
+  if (typeof window === "undefined") return null;
+
+  const rawLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(sessionSlug, layoutId));
+  if (!rawLayout) return null;
+
+  try {
+    return normalizeLayout(JSON.parse(rawLayout) as PlatformLayout);
+  } catch (error) {
+    console.error("Failed to parse stored layout:", error);
+    return null;
+  }
+}
+
 export function saveStoredLayout(sessionSlug: string, layout: PlatformLayout, layoutId = layout.id) {
   window.localStorage.setItem(getPlatformLayoutStorageKey(sessionSlug, layoutId), JSON.stringify(normalizeLayout(layout)));
 }
@@ -53,4 +71,34 @@ export function clearStoredLayout(sessionSlug: string, layoutId?: string) {
   }
 
   window.localStorage.removeItem(getLayoutStorageKey(sessionSlug));
+}
+
+export function loadStoredPlatformDisplays(sessionSlug: string): PlatformDisplayTarget[] {
+  if (typeof window === "undefined") return [];
+
+  const rawDisplays = window.localStorage.getItem(getPlatformDisplaysStorageKey(sessionSlug));
+  if (!rawDisplays) return [];
+
+  try {
+    const parsedDisplays = JSON.parse(rawDisplays) as PlatformDisplayTarget[];
+    return parsedDisplays.filter((display) => display.sessionId && display.layoutId && display.name);
+  } catch (error) {
+    console.error("Failed to parse stored platform displays:", error);
+    return [];
+  }
+}
+
+export function saveStoredPlatformDisplays(sessionSlug: string, displays: PlatformDisplayTarget[]) {
+  window.localStorage.setItem(getPlatformDisplaysStorageKey(sessionSlug), JSON.stringify(displays));
+}
+
+export function deleteStoredPlatformDisplay(sessionSlug: string, displayId: string) {
+  const displays = loadStoredPlatformDisplays(sessionSlug);
+  const displayToDelete = displays.find((display) => display.id === displayId);
+  const nextDisplays = displays.filter((display) => display.id !== displayId);
+  saveStoredPlatformDisplays(sessionSlug, nextDisplays);
+
+  if (displayToDelete) {
+    clearStoredLayout(sessionSlug, displayToDelete.layoutId);
+  }
 }

@@ -1,11 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Settings2 } from "lucide-react";
 import {
   mockDisplayUrls,
   mockPlatformDisplays,
-  mockPlatformData
+  mockPlatformData,
+  mockPlatformLayouts,
+  PlatformDisplayTarget
 } from "../../data/mockPlatformData";
+import {
+  deleteStoredPlatformDisplay,
+  loadStoredPlatformDisplays,
+  saveStoredLayout,
+  saveStoredPlatformDisplays
+} from "../../data/platformLayoutStorage";
 
 const captionPlayerOptions = {
   languages: ["Arabic", "Chinese", "English", "French", "Korean", "Russian", "Spanish"],
@@ -15,7 +23,77 @@ const captionPlayerOptions = {
   controls: ["View Transcript", "Show/Hide Header", "Scroll", "Whole Words"]
 };
 
+const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
+
+function toSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "platform";
+}
+
 export default function AdminSessionsPage() {
+  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformData.session.slug));
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [newDisplayDescription, setNewDisplayDescription] = useState("");
+  const [newTemplateLayoutId, setNewTemplateLayoutId] = useState(mockPlatformData.layout.id);
+  const [newDefaultLanguageCode, setNewDefaultLanguageCode] = useState("en");
+  const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
+  const displayUrls = [
+    ...mockDisplayUrls,
+    ...customDisplays.flatMap((display) =>
+      supportedLanguages.map((languageCode) => ({
+        displayId: display.id,
+        layoutId: display.layoutId,
+        sessionSlug: mockPlatformData.session.slug,
+        languageCode,
+        label: `${display.name} · ${languageCode.toUpperCase()}`,
+        path: `/live/${mockPlatformData.session.slug}/${languageCode}?layoutId=${display.layoutId}`
+      }))
+    )
+  ];
+
+  const handleAddPlatformDisplay = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const name = newDisplayName.trim();
+    if (!name) return;
+
+    const templateLayout = mockPlatformLayouts.find((layout) => layout.id === newTemplateLayoutId) ?? mockPlatformData.layout;
+    const idSuffix = `${toSlug(name)}-${Date.now()}`;
+    const layoutId = `layout-${idSuffix}`;
+    const displayId = `display-${idSuffix}`;
+    const nextLayout = {
+      ...templateLayout,
+      id: layoutId,
+      name,
+      components: templateLayout.components.map((component) => ({ ...component }))
+    };
+    const nextDisplay: PlatformDisplayTarget = {
+      id: displayId,
+      sessionId: mockPlatformData.session.id,
+      name,
+      description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
+      layoutId,
+      defaultLanguageCode: newDefaultLanguageCode
+    };
+    const nextDisplays = [...customDisplays, nextDisplay];
+
+    saveStoredLayout(mockPlatformData.session.slug, nextLayout, layoutId);
+    saveStoredPlatformDisplays(mockPlatformData.session.slug, nextDisplays);
+    setCustomDisplays(nextDisplays);
+    setNewDisplayName("");
+    setNewDisplayDescription("");
+    setNewTemplateLayoutId(mockPlatformData.layout.id);
+    setNewDefaultLanguageCode("en");
+  };
+
+  const handleDeletePlatformDisplay = (displayId: string) => {
+    deleteStoredPlatformDisplay(mockPlatformData.session.slug, displayId);
+    setCustomDisplays(loadStoredPlatformDisplays(mockPlatformData.session.slug));
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -49,7 +127,7 @@ export default function AdminSessionsPage() {
         </div>
 
         <div className="grid gap-2 p-5 sm:grid-cols-2 lg:grid-cols-3">
-          {mockDisplayUrls.map((displayUrl) => (
+          {displayUrls.map((displayUrl) => (
             <Link
               key={displayUrl.path}
               to={displayUrl.path}
@@ -73,8 +151,66 @@ export default function AdminSessionsPage() {
           </div>
         </div>
 
+        <form onSubmit={handleAddPlatformDisplay} className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_minmax(220px,1.3fr)_180px_140px_auto]">
+            <label className="text-xs font-bold text-slate-700">
+              플랫폼 이름
+              <input
+                value={newDisplayName}
+                onChange={(event) => setNewDisplayName(event.target.value)}
+                placeholder="예: VIP 룸 송출"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+              />
+            </label>
+            <label className="text-xs font-bold text-slate-700">
+              설명
+              <input
+                value={newDisplayDescription}
+                onChange={(event) => setNewDisplayDescription(event.target.value)}
+                placeholder="이 화면을 어디에 쓰는지 입력"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+              />
+            </label>
+            <label className="text-xs font-bold text-slate-700">
+              시작 템플릿
+              <select
+                value={newTemplateLayoutId}
+                onChange={(event) => setNewTemplateLayoutId(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+              >
+                {mockPlatformLayouts.map((layout) => (
+                  <option key={layout.id} value={layout.id}>{layout.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-bold text-slate-700">
+              기본 언어
+              <select
+                value={newDefaultLanguageCode}
+                onChange={(event) => setNewDefaultLanguageCode(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+              >
+                {supportedLanguages.map((languageCode) => (
+                  <option key={languageCode} value={languageCode}>{languageCode.toUpperCase()}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+              >
+                플랫폼 추가
+              </button>
+            </div>
+          </div>
+        </form>
+
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {mockPlatformDisplays.map((display) => (
+          {allPlatformDisplays.map((display) => {
+            const isCustomDisplay = customDisplays.some((customDisplay) => customDisplay.id === display.id);
+
+            return (
             <div key={display.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-bold text-slate-900">{display.name}</p>
               <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-500">{display.description}</p>
@@ -92,9 +228,19 @@ export default function AdminSessionsPage() {
                 >
                   미리보기
                 </Link>
+                {isCustomDisplay && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePlatformDisplay(display.id)}
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-bold text-rose-700 hover:bg-rose-50"
+                  >
+                    삭제
+                  </button>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

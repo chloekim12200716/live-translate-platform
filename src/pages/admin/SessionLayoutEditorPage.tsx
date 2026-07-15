@@ -14,12 +14,17 @@ import {
   mockPlatformDisplays,
   mockPlatformSession,
   PlatformComponentType,
+  PlatformDisplayTarget,
+  PlatformLayout,
   PlatformLayoutComponent
 } from "../../data/mockPlatformData";
 import {
   clearStoredLayout,
+  loadStoredLayoutById,
+  loadStoredPlatformDisplays,
   loadStoredLayout,
-  saveStoredLayout
+  saveStoredLayout,
+  saveStoredPlatformDisplays
 } from "../../data/platformLayoutStorage";
 import BackgroundSettingsPanel from "../../components/platform/layoutEditor/BackgroundSettingsPanel";
 import ComponentListPanel from "../../components/platform/layoutEditor/ComponentListPanel";
@@ -33,19 +38,38 @@ import {
   snapLayoutUnit
 } from "../../utils/layoutEditor";
 
+const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
+
+function toSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "platform";
+}
+
 export default function SessionLayoutEditorPage() {
   const { sessionId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const isKnownSession = sessionId === mockPlatformSession.id;
+  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformSession.slug));
   const selectedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
-  const selectedBaseLayout = mockPlatformLayouts.find((layout) => layout.id === selectedLayoutId) ?? mockPlatformLayout;
-  const selectedDisplay = mockPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
+  const customLayouts = customDisplays
+    .map((display) => loadStoredLayoutById(mockPlatformSession.slug, display.layoutId))
+    .filter((customLayout): customLayout is PlatformLayout => Boolean(customLayout));
+  const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
+  const allBaseLayouts = [...mockPlatformLayouts, ...customLayouts];
+  const selectedBaseLayout = allBaseLayouts.find((layout) => layout.id === selectedLayoutId) ?? mockPlatformLayout;
+  const selectedDisplay = allPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
   const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isBackgroundDragActive, setIsBackgroundDragActive] = useState(false);
   const [draggingComponentId, setDraggingComponentId] = useState<string | null>(null);
   const [resizingComponentId, setResizingComponentId] = useState<string | null>(null);
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [newDisplayDescription, setNewDisplayDescription] = useState("");
+  const [newDefaultLanguageCode, setNewDefaultLanguageCode] = useState("en");
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     componentId: string;
@@ -77,6 +101,40 @@ export default function SessionLayoutEditorPage() {
   }, [selectedBaseLayout.id]);
 
   const handleLayoutSelect = (layoutId: string) => {
+    setSearchParams({ layoutId });
+  };
+
+  const handleAddPlatformLayout = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const name = newDisplayName.trim();
+    if (!name) return;
+
+    const idSuffix = `${toSlug(name)}-${Date.now()}`;
+    const layoutId = `layout-${idSuffix}`;
+    const displayId = `display-${idSuffix}`;
+    const nextLayout: PlatformLayout = {
+      ...layout,
+      id: layoutId,
+      name,
+      components: layout.components.map((component) => ({ ...component }))
+    };
+    const nextDisplay: PlatformDisplayTarget = {
+      id: displayId,
+      sessionId: mockPlatformSession.id,
+      name,
+      description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
+      layoutId,
+      defaultLanguageCode: newDefaultLanguageCode
+    };
+    const nextDisplays = [...customDisplays, nextDisplay];
+
+    saveStoredLayout(mockPlatformSession.slug, nextLayout, layoutId);
+    saveStoredPlatformDisplays(mockPlatformSession.slug, nextDisplays);
+    setCustomDisplays(nextDisplays);
+    setNewDisplayName("");
+    setNewDisplayDescription("");
+    setNewDefaultLanguageCode("en");
     setSearchParams({ layoutId });
   };
 
@@ -276,7 +334,13 @@ export default function SessionLayoutEditorPage() {
   };
 
   const handleResetLayout = () => {
-    clearStoredLayout(mockPlatformSession.slug, selectedBaseLayout.id);
+    const isMockLayout = mockPlatformLayouts.some((baseLayout) => baseLayout.id === selectedBaseLayout.id);
+    if (isMockLayout) {
+      clearStoredLayout(mockPlatformSession.slug, selectedBaseLayout.id);
+    } else {
+      saveStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id);
+    }
+
     setLayout(selectedBaseLayout);
     setSelectedComponentId(selectedBaseLayout.components[0]?.id ?? "");
     setSavedAt(null);
@@ -419,8 +483,50 @@ export default function SessionLayoutEditorPage() {
             </div>
             <p className="font-mono text-[11px] text-slate-500">{selectedBaseLayout.id}</p>
           </div>
+          <form onSubmit={handleAddPlatformLayout} className="mt-4 rounded-xl border border-indigo-100 bg-white p-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_120px_auto]">
+              <label className="text-xs font-bold text-slate-700">
+                새 플랫폼 이름
+                <input
+                  value={newDisplayName}
+                  onChange={(event) => setNewDisplayName(event.target.value)}
+                  placeholder="예: 로비 전광판"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                설명
+                <input
+                  value={newDisplayDescription}
+                  onChange={(event) => setNewDisplayDescription(event.target.value)}
+                  placeholder="현재 레이아웃을 복제해서 새 플랫폼으로 저장"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                기본 언어
+                <select
+                  value={newDefaultLanguageCode}
+                  onChange={(event) => setNewDefaultLanguageCode(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
+                >
+                  {supportedLanguages.map((languageCode) => (
+                    <option key={languageCode} value={languageCode}>{languageCode.toUpperCase()}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                >
+                  플랫폼 추가
+                </button>
+              </div>
+            </div>
+          </form>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {mockPlatformDisplays.map((display) => {
+            {allPlatformDisplays.map((display) => {
               const isSelected = display.layoutId === selectedBaseLayout.id;
 
               return (
