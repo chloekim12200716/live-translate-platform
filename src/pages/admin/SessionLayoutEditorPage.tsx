@@ -1,6 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  BadgeInfo,
+  Captions,
+  Clapperboard,
+  Grid3X3,
+  Image,
+  Layers3,
+  MessageSquareText,
+  MonitorPlay,
+  Presentation,
+  Radio,
+  Settings2,
+  Sparkles
+} from "lucide-react";
+import {
   mockPlatformLayout,
   mockPlatformSession,
   PlatformComponentType,
@@ -22,6 +36,15 @@ import {
   layoutUnitStep,
   snapLayoutUnit
 } from "../../utils/layoutEditor";
+
+const builderMenuItems = ["화면 구성", "세션 관리", "자막 설정", "Q&A 관리", "공지/배너 관리", "설정"];
+const componentGuideItems = [
+  { type: "video", title: "영상 (Video)", description: "연사/발표자 영상을 보여주는 영역", icon: MonitorPlay, color: "text-violet-600 bg-violet-50" },
+  { type: "slide", title: "PPT/자료 (Slides)", description: "발표 자료와 이미지 슬라이드 영역", icon: Presentation, color: "text-sky-600 bg-sky-50" },
+  { type: "caption", title: "실시간 자막", description: "AI가 번역한 자막을 표시하는 영역", icon: Captions, color: "text-emerald-600 bg-emerald-50" },
+  { type: "qa", title: "Q&A / 채팅", description: "청중 질문과 답변을 보여주는 영역", icon: MessageSquareText, color: "text-orange-600 bg-orange-50" },
+  { type: "notice", title: "세션 정보/공지", description: "행사 정보와 안내 문구 영역", icon: BadgeInfo, color: "text-pink-600 bg-pink-50" }
+] as const;
 
 export default function SessionLayoutEditorPage() {
   const { sessionId } = useParams();
@@ -346,89 +369,169 @@ export default function SessionLayoutEditorPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Layout Editor</p>
-          <h2 className="text-2xl font-bold text-slate-900">세션 레이아웃 편집기 초안</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            배경 이미지 위의 컴포넌트 박스를 선택하고 grid 좌표와 크기를 숫자로 조정합니다.
-          </p>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-600">
+              <Sparkles className="h-4 w-4" />
+              Component Layout Builder
+            </div>
+            <h2 className="mt-2 text-2xl font-black text-slate-950">컴포넌트 방식 화면 구성</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              영상, 자료, 실시간 자막, Q&A, 공지 컴포넌트를 배경 위에 배치하고 세션별 공개 화면을 구성합니다.
+              선택한 컴포넌트는 grid 좌표와 드래그로 위치/크기를 조정할 수 있습니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleResetLayout}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              기본값 복원
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveLayout}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+            >
+              저장
+            </button>
+            <Link
+              to={`/live/${mockPlatformSession.slug}/en`}
+              onClick={handleSaveLayout}
+              className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
+            >
+              미리보기
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleResetLayout}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-          >
-            기본값 복원
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveLayout}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
-          >
-            저장
-          </button>
-          <Link
-            to={`/live/${mockPlatformSession.slug}/en`}
-            onClick={handleSaveLayout}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
-          >
-            미리보기
-          </Link>
-        </div>
-      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">{layout.name}</h3>
-              <p className="text-xs text-slate-500">Grid {layout.columns} x {layout.rows}</p>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          {[
+            { label: "행사/세션 생성", icon: Clapperboard },
+            { label: "화면 템플릿 선택", icon: Image },
+            { label: "컴포넌트 배치", icon: Grid3X3 },
+            { label: "실시간 송출 시작", icon: Radio }
+          ].map(({ label, icon: Icon }, index) => (
+            <div key={label} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                <Icon className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Step {index + 1}</p>
+                <p className="text-xs font-bold text-slate-900">{label}</p>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {savedAt && <span className="text-xs font-semibold text-emerald-600">저장됨 {savedAt}</span>}
-              <label className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
-                배경 이미지 선택
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBackgroundFileChange}
-                  className="sr-only"
-                />
-              </label>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_360px]">
+        <aside className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-white shadow-sm">
+          <div className="border-b border-white/10 p-5">
+            <div className="flex items-center gap-2">
+              <Layers3 className="h-4 w-4 text-cyan-300" />
+              <h3 className="text-sm font-black">대시보드</h3>
             </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">화면 구성과 실시간 송출 요소를 관리합니다.</p>
           </div>
 
-          <LayoutCanvas
-            layout={layout}
-            selectedComponentId={selectedComponentId}
-            draggingComponentId={draggingComponentId}
-            resizingComponentId={resizingComponentId}
-            isBackgroundDragActive={isBackgroundDragActive}
-            gridRef={gridRef}
-            onBackgroundDragActiveChange={setIsBackgroundDragActive}
-            onBackgroundDrop={handleBackgroundDrop}
-            onSelectComponent={setSelectedComponentId}
-            onStartDrag={handleStartDrag}
-            onStartResize={handleStartResize}
-            onComponentKeyDown={handleComponentKeyDown}
-            onDeleteComponent={handleDeleteComponent}
-          />
+          <nav className="space-y-1 border-b border-white/10 p-3">
+            {builderMenuItems.map((item, index) => (
+              <button
+                key={item}
+                type="button"
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-bold transition ${
+                  index === 0 ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-white/10"
+                }`}
+              >
+                {item}
+                {index === 0 && <span className="h-1.5 w-1.5 rounded-full bg-cyan-200" />}
+              </button>
+            ))}
+          </nav>
 
-          <BackgroundSettingsPanel
+          <div className="space-y-2 p-4">
+            <p className="px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">주요 컴포넌트</p>
+            {componentGuideItems.map(({ title, description, icon: Icon, color }) => (
+              <div key={title} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-white">{title}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <main className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">1. 화면 구성 예시</h3>
+                <p className="text-xs text-slate-500">{layout.name} · Grid {layout.columns} x {layout.rows}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {savedAt && <span className="text-xs font-semibold text-emerald-600">저장됨 {savedAt}</span>}
+                <label className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
+                  배경 이미지 선택
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundFileChange}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <LayoutCanvas
+              layout={layout}
+              selectedComponentId={selectedComponentId}
+              draggingComponentId={draggingComponentId}
+              resizingComponentId={resizingComponentId}
+              isBackgroundDragActive={isBackgroundDragActive}
+              gridRef={gridRef}
+              onBackgroundDragActiveChange={setIsBackgroundDragActive}
+              onBackgroundDrop={handleBackgroundDrop}
+              onSelectComponent={setSelectedComponentId}
+              onStartDrag={handleStartDrag}
+              onStartResize={handleStartResize}
+              onComponentKeyDown={handleComponentKeyDown}
+              onDeleteComponent={handleDeleteComponent}
+            />
+
+            <BackgroundSettingsPanel
+              layout={layout}
+              onLayoutChange={setLayout}
+            />
+          </div>
+        </main>
+
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-indigo-600" />
+              <h3 className="text-sm font-black text-slate-900">3. 컴포넌트 설정</h3>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              선택한 영역의 타입, 좌표, 크기, 노출 여부를 조정합니다.
+            </p>
+          </div>
+          <ComponentSettingsPanel
             layout={layout}
-            onLayoutChange={setLayout}
+            selectedComponent={selectedComponent}
+            onUpdateSelectedComponent={updateSelectedComponent}
+            onNumberChange={handleNumberChange}
+            onDeleteSelectedComponent={handleDeleteSelectedComponent}
           />
         </div>
-
-        <ComponentSettingsPanel
-          layout={layout}
-          selectedComponent={selectedComponent}
-          onUpdateSelectedComponent={updateSelectedComponent}
-          onNumberChange={handleNumberChange}
-          onDeleteSelectedComponent={handleDeleteSelectedComponent}
-        />
       </div>
 
       <ComponentListPanel
@@ -438,6 +541,30 @@ export default function SessionLayoutEditorPage() {
         onSelectComponent={setSelectedComponentId}
         onDeleteComponent={handleDeleteComponent}
       />
+
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-black text-slate-900">한눈에 보는 흐름</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-5">
+            {["행사/세션 생성", "템플릿 선택", "컴포넌트 배치", "저장 및 미리보기", "실시간 송출"].map((item, index) => (
+              <div key={item} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-sm font-black text-indigo-700">
+                  {index + 1}
+                </div>
+                <p className="mt-2 text-xs font-bold text-slate-800">{item}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-sm leading-relaxed text-emerald-950 shadow-sm">
+          <h3 className="text-sm font-black">실제 운영 예시</h3>
+          <p className="mt-2">
+            한 행사에서 여러 세션을 동시에 운영할 때, 세션마다 다른 레이아웃과 자막 스트림을 적용하고
+            각 언어 URL을 독립적으로 송출할 수 있습니다.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

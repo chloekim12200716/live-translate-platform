@@ -25,6 +25,22 @@ interface LayoutCanvasProps {
   onDeleteComponent: (componentId: string) => void;
 }
 
+const componentChromeByType: Record<PlatformLayoutComponent["type"], string> = {
+  video: "border-violet-400 bg-violet-950/35 ring-violet-300/30",
+  slide: "border-sky-400 bg-sky-950/35 ring-sky-300/30",
+  caption: "border-emerald-400 bg-emerald-950/35 ring-emerald-300/30",
+  qa: "border-orange-400 bg-orange-950/35 ring-orange-300/30",
+  notice: "border-pink-400 bg-pink-950/35 ring-pink-300/30"
+};
+
+const componentBadgeByType: Record<PlatformLayoutComponent["type"], string> = {
+  video: "bg-violet-500",
+  slide: "bg-sky-500",
+  caption: "bg-emerald-500",
+  qa: "bg-orange-500",
+  notice: "bg-pink-500"
+};
+
 export default function LayoutCanvas({
   layout,
   selectedComponentId,
@@ -69,9 +85,21 @@ export default function LayoutCanvas({
           배경 이미지 파일을 여기에 놓으세요
         </div>
       )}
+      <div className="pointer-events-none absolute left-3 right-3 top-3 z-[20] flex items-center justify-between rounded-md border border-white/10 bg-slate-950/80 px-3 py-2 text-white backdrop-blur">
+        <div className="flex items-center gap-2">
+          <span className="rounded bg-rose-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider">Live</span>
+          <span className="text-xs font-bold">제27회 세계지식포럼</span>
+        </div>
+        <span className="hidden text-[11px] font-semibold text-slate-300 sm:block">
+          Global Innovation Lecture Series
+        </span>
+      </div>
+
       <div ref={gridRef} className="relative h-full">
-        {layout.components.map((component) => {
+        {layout.components.map((component, componentIndex) => {
           const isSelected = component.id === selectedComponentId;
+          const componentChrome = componentChromeByType[component.type] ?? "border-white/40 bg-slate-950/55 ring-white/20";
+          const componentBadge = componentBadgeByType[component.type] ?? "bg-slate-500";
 
           return (
             <div
@@ -81,10 +109,10 @@ export default function LayoutCanvas({
               onPointerDown={(event) => onStartDrag(event, component)}
               onClick={() => onSelectComponent(component.id)}
               onKeyDown={(event) => onComponentKeyDown(event, component)}
-              className={`group relative min-h-0 cursor-move select-none rounded-lg border-2 p-2 text-left shadow-lg transition ${
+              className={`group relative min-h-0 cursor-move select-none rounded-md border-2 border-dashed p-2 text-left shadow-lg ring-1 transition ${
                 isSelected
-                  ? "border-yellow-300 bg-yellow-300/30 text-white ring-2 ring-yellow-200"
-                  : "border-white/40 bg-slate-950/55 text-slate-100 hover:border-cyan-200"
+                  ? "border-yellow-300 bg-yellow-300/25 text-white ring-2 ring-yellow-200"
+                  : `${componentChrome} text-slate-100 hover:border-white`
               }`}
               style={{
                 ...getComponentFrameStyle(component, layout),
@@ -94,6 +122,9 @@ export default function LayoutCanvas({
                 zIndex: component.zIndex
               }}
             >
+              <span className={`absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-md text-xs font-black text-white shadow ${componentBadge}`}>
+                {componentIndex + 1}
+              </span>
               <span className="block truncate text-xs font-black uppercase tracking-wider">
                 {component.label}
               </span>
