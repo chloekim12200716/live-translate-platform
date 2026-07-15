@@ -18,10 +18,12 @@ interface CaptionComponentProps {
 }
 
 interface StreamCaptionPayload {
+  id?: string;
   sourceText?: string;
   translatedText?: string;
   engine?: string;
   sequence?: number;
+  isFinal?: boolean;
 }
 
 interface StreamReadyPayload {
@@ -112,6 +114,17 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
       setSequence(data.sequence || 0);
       setIsLoading(false);
       setErrorMessage("");
+      window.dispatchEvent(new CustomEvent("platform-caption", {
+        detail: {
+          id: data.id,
+          languageCode: normalizedLanguage,
+          sourceText: data.sourceText,
+          translatedText: data.translatedText,
+          engine: data.engine,
+          sequence: data.sequence,
+          isFinal: data.isFinal
+        }
+      }));
     });
     eventSource.addEventListener("caption-error", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as { message?: string };
