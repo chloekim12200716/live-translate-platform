@@ -21,6 +21,7 @@ import {
   saveStoredVideoFile,
   saveStoredVideoUrl
 } from "../../data/platformVideoStorage";
+import LiveSpeechCaptionTester from "../../components/platform/LiveSpeechCaptionTester";
 
 const captionPlayerOptions = {
   languages: ["Arabic", "Chinese", "English", "French", "Korean", "Russian", "Spanish"],
@@ -330,6 +331,11 @@ export default function AdminSessionsPage() {
           </div>
         </div>
       </div>
+
+      <LiveSpeechCaptionTester
+        sessionSlug={mockPlatformData.session.slug}
+        defaultSourceLanguageCode={mockPlatformData.session.sourceLanguageCode}
+      />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
