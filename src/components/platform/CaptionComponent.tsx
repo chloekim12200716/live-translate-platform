@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Languages } from "lucide-react";
 
 const captionByLanguage: Record<string, string> = {
@@ -77,6 +77,39 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
   const [engine, setEngine] = useState(normalizedLanguage === normalizedSourceLanguage ? "Source Caption" : "Local Mock Caption");
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
+  const latestCaptionMeasureRef = useRef<HTMLParagraphElement>(null);
+  const latestCaptionText = captionLines[captionLines.length - 1]?.text ?? "";
+  const [shouldShowOnlyLatestCaption, setShouldShowOnlyLatestCaption] = useState(false);
+
+  useLayoutEffect(() => {
+    const measureLatestCaption = () => {
+      const measureElement = latestCaptionMeasureRef.current;
+      if (!measureElement || !latestCaptionText) {
+        setShouldShowOnlyLatestCaption(false);
+        return;
+      }
+
+      const lineHeight = Number.parseFloat(window.getComputedStyle(measureElement).lineHeight);
+      if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
+        setShouldShowOnlyLatestCaption(false);
+        return;
+      }
+
+      setShouldShowOnlyLatestCaption(measureElement.scrollHeight > lineHeight * 1.45);
+    };
+
+    measureLatestCaption();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measureLatestCaption);
+      return () => window.removeEventListener("resize", measureLatestCaption);
+    }
+
+    const resizeObserver = new ResizeObserver(measureLatestCaption);
+    if (latestCaptionMeasureRef.current?.parentElement) {
+      resizeObserver.observe(latestCaptionMeasureRef.current.parentElement);
+    }
+    return () => resizeObserver.disconnect();
+  }, [latestCaptionText]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -208,22 +241,33 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
     };
   }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sessionSlug, sourceText]);
 
+  const visibleCaptionLines = shouldShowOnlyLatestCaption && captionLines.length > 0
+    ? captionLines.slice(-1)
+    : captionLines.slice(-2);
+
   return (
-    <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-yellow-200/20 bg-slate-950/90 px-6 py-4 text-center text-white shadow-2xl backdrop-blur">
-      <div className="max-w-5xl space-y-2">
-        <div className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest text-yellow-200">
+    <div className="flex h-full min-h-0 items-center justify-center overflow-hidden rounded-lg border border-yellow-200/20 bg-slate-950/90 px-5 py-3 text-center text-white shadow-2xl backdrop-blur md:px-6">
+      <div className="flex h-full min-h-0 w-full max-w-5xl flex-col justify-center">
+        <div className="flex shrink-0 items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-yellow-200 md:text-[11px]">
           <Languages className="h-4 w-4" />
           {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
         </div>
-        <div className="relative h-[4.6rem] overflow-hidden text-lg font-semibold leading-snug text-yellow-50 md:h-[5rem] md:text-2xl">
+        <div className="relative mt-2 min-h-0 flex-1 overflow-hidden text-lg font-semibold leading-snug text-yellow-50 md:text-2xl">
+          <p
+            ref={latestCaptionMeasureRef}
+            aria-hidden="true"
+            className="invisible pointer-events-none absolute inset-x-0 top-0 whitespace-normal break-words"
+          >
+            {latestCaptionText}
+          </p>
           {isLoading || captionLines.length === 0 ? (
             <p>&nbsp;</p>
           ) : (
-            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1">
-              {captionLines.map((line, index) => (
+            <div className="flex h-full min-h-0 flex-col justify-end gap-1 overflow-hidden">
+              {visibleCaptionLines.map((line, index) => (
                 <p
                   key={line.key}
-                  className={index === captionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}
+                  className={`${shouldShowOnlyLatestCaption ? "line-clamp-2" : "line-clamp-1"} whitespace-normal break-words ${index === visibleCaptionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}`}
                 >
                   {line.text}
                 </p>
