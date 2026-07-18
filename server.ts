@@ -18,7 +18,7 @@ app.use(express.json());
 let aiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-live-2.5-flash-preview";
+const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 
 const translationLanguageLabels: Record<string, string> = {
