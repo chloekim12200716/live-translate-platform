@@ -16,6 +16,7 @@ app.use(express.json());
 
 // Initialize Gemini SDK with fallback
 let aiClient: GoogleGenAI | null = null;
+let liveAiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.5-live-translate-preview";
@@ -399,6 +400,14 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
 if (API_KEY && API_KEY !== "MY_GEMINI_API_KEY") {
   try {
     aiClient = new GoogleGenAI({
+      apiKey: API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+    liveAiClient = new GoogleGenAI({
       apiKey: API_KEY,
       httpOptions: {
         apiVersion: GEMINI_LIVE_API_VERSION,
@@ -1408,7 +1417,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     };
 
     const connectLiveSession = async () => {
-      if (!aiClient) {
+      if (!liveAiClient) {
         sendAudioLiveSocketMessage(socket, {
           type: "error",
           message: "Gemini API client is not configured."
@@ -1420,10 +1429,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       try {
         sendAudioLiveSocketMessage(socket, {
           type: "connecting",
-          model: GEMINI_LIVE_MODEL
+          model: GEMINI_LIVE_MODEL,
+          message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, target=${getLiveTranslateTargetLanguageCode(targetLang)}`
         });
 
-        liveSession = await (aiClient as any).live.connect({
+        liveSession = await (liveAiClient as any).live.connect({
           model: GEMINI_LIVE_MODEL,
           config: {
             responseModalities: ["AUDIO"],
@@ -1432,7 +1442,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             translationConfig: {
               targetLanguageCode: getLiveTranslateTargetLanguageCode(targetLang),
               echoTargetLanguage: true
-            },
+            }
           },
           callbacks: {
             onopen: () => {

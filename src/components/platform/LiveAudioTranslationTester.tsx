@@ -168,7 +168,7 @@ export default function LiveAudioTranslationTester({
         } else if (data.type === "open") {
           pushDiagnosticEvent("Gemini Live session opened");
         } else if (data.type === "connecting") {
-          pushDiagnosticEvent("connecting to Gemini Live");
+          pushDiagnosticEvent(data.message || "connecting to Gemini Live");
         } else if (data.type === "debug") {
           pushDiagnosticEvent(data.message || "debug event");
         } else if (data.type === "caption" && data.transcript) {
