@@ -1330,8 +1330,10 @@ function createLiveTranscriptBuffer({
       }
 
       if (modelText) {
-        pendingText = modelText;
-        flush("modelTurn");
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `modelTurn ignored: ${modelText.length} chars`
+        });
       }
     },
     flush,
