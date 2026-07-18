@@ -1215,6 +1215,44 @@ function shouldPublishTranscriptText(text: string) {
   return true;
 }
 
+function appendTranscriptFragment(currentText: string, fragment: string) {
+  const normalizedCurrent = normalizeTranscriptText(currentText);
+  const normalizedFragment = normalizeTranscriptText(fragment);
+  if (!normalizedFragment) return currentText;
+  if (!normalizedCurrent) return fragment;
+
+  const lowerCurrent = normalizedCurrent.toLowerCase();
+  const lowerFragment = normalizedFragment.toLowerCase();
+  if (lowerFragment.startsWith(lowerCurrent)) {
+    return fragment;
+  }
+  if (lowerCurrent.endsWith(lowerFragment)) {
+    return currentText;
+  }
+
+  const fragmentHasLeadingSpace = /^\s/.test(fragment);
+  const currentHasTrailingSpace = /\s$/.test(currentText);
+  if (fragmentHasLeadingSpace || currentHasTrailingSpace) {
+    return `${currentText}${fragment}`;
+  }
+
+  if (/^[,.;:!?)]/.test(normalizedFragment)) {
+    return `${normalizedCurrent}${normalizedFragment}`;
+  }
+
+  if (/[([{]$/.test(normalizedCurrent)) {
+    return `${normalizedCurrent}${normalizedFragment}`;
+  }
+
+  const currentEndsWithLetter = /[a-zA-Z]$/.test(normalizedCurrent);
+  const fragmentStartsWithLowercase = /^[a-z]/.test(normalizedFragment);
+  if (currentEndsWithLetter && fragmentStartsWithLowercase) {
+    return `${normalizedCurrent}${normalizedFragment}`;
+  }
+
+  return `${normalizedCurrent} ${normalizedFragment}`;
+}
+
 function createLiveTranscriptBuffer({
   socket,
   publishTranscript
@@ -1223,6 +1261,7 @@ function createLiveTranscriptBuffer({
   publishTranscript: (text: string, engine?: string) => void;
 }) {
   let pendingText = "";
+  let hasFinalFragments = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const clearDebounceTimer = () => {
@@ -1235,6 +1274,7 @@ function createLiveTranscriptBuffer({
     clearDebounceTimer();
     const normalizedText = normalizeTranscriptText(pendingText);
     pendingText = "";
+    hasFinalFragments = false;
 
     if (!shouldPublishTranscriptText(normalizedText)) {
       if (normalizedText) {
@@ -1261,29 +1301,32 @@ function createLiveTranscriptBuffer({
   return {
     handleLiveMessage(message: LiveServerMessageLike) {
       const serverContent = message.serverContent;
-      const finalText = serverContent?.inputTranscription?.text?.trim() || "";
-      const interimText = serverContent?.interimInputTranscription?.text?.trim() || "";
+      const finalText = serverContent?.inputTranscription?.text || "";
+      const interimText = serverContent?.interimInputTranscription?.text || "";
       const modelText = serverContent?.modelTurn?.parts
         ?.map((part) => part.text ?? "")
         .join("")
         .trim() ?? "";
 
       if (interimText) {
-        pendingText = interimText;
-        scheduleDebouncedFlush();
+        if (!hasFinalFragments) {
+          pendingText = interimText;
+          scheduleDebouncedFlush();
+        }
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
-          message: `interim transcript buffered: ${interimText.length} chars`
+          message: `interim transcript ${hasFinalFragments ? "observed" : "buffered"}: ${normalizeTranscriptText(interimText).length} chars`
         });
       }
 
       if (finalText) {
-        pendingText = finalText;
-        if (serverContent?.inputTranscription?.finished !== false) {
-          flush("final");
-        } else {
-          scheduleDebouncedFlush();
-        }
+        hasFinalFragments = true;
+        pendingText = appendTranscriptFragment(pendingText, finalText);
+        scheduleDebouncedFlush();
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `final transcript fragment buffered: ${normalizeTranscriptText(finalText)}`
+        });
       }
 
       if (modelText) {
