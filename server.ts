@@ -194,6 +194,63 @@ interface TranslationErrorLog {
 }
 
 const translationErrorLogs: TranslationErrorLog[] = [];
+const TRANSLATION_CACHE_LIMIT = 500;
+const translationResultCache = new Map<string, TranslationResult>();
+const inFlightTranslations = new Map<string, Promise<TranslationResult>>();
+let geminiTranslationBackoffUntil = 0;
+let lastGeminiTranslationConsoleLogAt = 0;
+
+function getTranslationCacheKey(text: string, sourceLang: string, targetLang: string) {
+  return `${sourceLang}:${targetLang}:${text.replace(/\s+/g, " ").trim().toLowerCase()}`;
+}
+
+function cacheTranslationResult(cacheKey: string, result: TranslationResult) {
+  translationResultCache.set(cacheKey, result);
+  if (translationResultCache.size > TRANSLATION_CACHE_LIMIT) {
+    const oldestKey = translationResultCache.keys().next().value;
+    if (oldestKey) {
+      translationResultCache.delete(oldestKey);
+    }
+  }
+}
+
+function getErrorStatus(error: unknown) {
+  const directStatus = (error as { status?: number })?.status;
+  if (typeof directStatus === "number") return directStatus;
+
+  const message = error instanceof Error ? error.message : String(error);
+  const matchedCode = message.match(/"code"\s*:\s*(\d+)/);
+  return matchedCode ? Number(matchedCode[1]) : 0;
+}
+
+function getRetryDelayMs(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const retryDelayMatch = message.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+  if (retryDelayMatch) {
+    return Number(retryDelayMatch[1]) * 1000;
+  }
+
+  const retryInMatch = message.match(/retry in ([\d.]+)s/i);
+  if (retryInMatch) {
+    return Math.ceil(Number(retryInMatch[1]) * 1000);
+  }
+
+  return 30000;
+}
+
+function createFallbackTranslationResult(
+  text: string,
+  sourceLang: string,
+  targetLang: string,
+  engine = "Rule-based Medical Dict Engine"
+): TranslationResult {
+  return {
+    translatedText: getFallbackTranslation(text, sourceLang, targetLang),
+    engine,
+    sourceLang,
+    targetLang
+  };
+}
 
 function recordTranslationError({
   error,
@@ -226,6 +283,7 @@ function recordTranslationError({
 async function translateText(text: string, sourceLang: string | undefined, targetLang: string | undefined): Promise<TranslationResult> {
   const normalizedSourceLang = (sourceLang || "en").toLowerCase();
   const normalizedTargetLang = (targetLang || "ko").toLowerCase();
+  const cacheKey = getTranslationCacheKey(text, normalizedSourceLang, normalizedTargetLang);
 
   if (normalizedSourceLang === normalizedTargetLang) {
     return {
@@ -234,6 +292,16 @@ async function translateText(text: string, sourceLang: string | undefined, targe
       sourceLang: normalizedSourceLang,
       targetLang: normalizedTargetLang
     };
+  }
+
+  const cachedResult = translationResultCache.get(cacheKey);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
+  const inFlightTranslation = inFlightTranslations.get(cacheKey);
+  if (inFlightTranslation) {
+    return inFlightTranslation;
   }
 
   const dictionaryContext = medicalDictionary.map(item => `- ${item.term}: ${item.definition}`).join("\n");
@@ -245,7 +313,19 @@ ${dictionaryContext}
 
 Output ONLY the direct translation. Do not include extra comments, intros, or explanations.`;
 
+  const translationPromise = (async () => {
   if (aiClient) {
+    const now = Date.now();
+    if (now < geminiTranslationBackoffUntil) {
+      const cooldownSeconds = Math.ceil((geminiTranslationBackoffUntil - now) / 1000);
+      return createFallbackTranslationResult(
+        text,
+        normalizedSourceLang,
+        normalizedTargetLang,
+        `Rule-based Medical Dict Engine (Gemini quota cooldown ${cooldownSeconds}s)`
+      );
+    }
+
     try {
       const response = await Promise.race([
         aiClient.models.generateContent({
@@ -264,29 +344,55 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
       if (!translatedText) {
         throw new Error("Gemini translation returned an empty response.");
       }
-      return {
+      const result = {
         translatedText,
         engine: `Gemini ${GEMINI_MODEL}`,
         sourceLang: normalizedSourceLang,
         targetLang: normalizedTargetLang
       };
+      cacheTranslationResult(cacheKey, result);
+      return result;
     } catch (error: unknown) {
+      const errorStatus = getErrorStatus(error);
+      if (errorStatus === 429) {
+        geminiTranslationBackoffUntil = Date.now() + getRetryDelayMs(error);
+      }
+
       recordTranslationError({
         error,
         text,
         sourceLang: normalizedSourceLang,
         targetLang: normalizedTargetLang
       });
-      console.error("Gemini Translation Error:", error);
+
+      const shouldLogNow = Date.now() - lastGeminiTranslationConsoleLogAt > 10000;
+      if (shouldLogNow) {
+        lastGeminiTranslationConsoleLogAt = Date.now();
+        if (errorStatus === 429) {
+          console.warn("Gemini translation quota exceeded. Falling back until retry window clears.");
+        } else {
+          console.error("Gemini Translation Error:", error);
+        }
+      }
     }
   }
 
-  return {
-    translatedText: getFallbackTranslation(text, normalizedSourceLang, normalizedTargetLang),
-    engine: "Rule-based Medical Dict Engine",
-    sourceLang: normalizedSourceLang,
-    targetLang: normalizedTargetLang
-  };
+  return createFallbackTranslationResult(
+    text,
+    normalizedSourceLang,
+    normalizedTargetLang,
+    Date.now() < geminiTranslationBackoffUntil
+      ? "Rule-based Medical Dict Engine (Gemini quota exceeded)"
+      : "Rule-based Medical Dict Engine"
+  );
+  })();
+
+  inFlightTranslations.set(cacheKey, translationPromise);
+  try {
+    return await translationPromise;
+  } finally {
+    inFlightTranslations.delete(cacheKey);
+  }
 }
 
 if (API_KEY && API_KEY !== "MY_GEMINI_API_KEY") {
