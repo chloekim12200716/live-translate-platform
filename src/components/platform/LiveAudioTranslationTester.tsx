@@ -111,6 +111,9 @@ export default function LiveAudioTranslationTester({
           message?: string;
           transcript?: string;
           sequence?: number;
+          code?: number;
+          reason?: string;
+          wasClean?: boolean;
         };
 
         if (data.type === "ready") {
@@ -122,7 +125,11 @@ export default function LiveAudioTranslationTester({
         } else if (data.type === "error") {
           setStatusMessage(data.message || "Live API WebSocket 오류");
         } else if (data.type === "closed") {
-          setStatusMessage("Live API 세션 종료됨");
+          const closeDetail = [
+            data.code ? `code ${data.code}` : "",
+            data.reason ? data.reason : ""
+          ].filter(Boolean).join(" · ");
+          setStatusMessage(closeDetail ? `Live API 세션 종료됨: ${closeDetail}` : "Live API 세션 종료됨");
         }
       };
       socket.onerror = () => {
@@ -183,7 +190,7 @@ export default function LiveAudioTranslationTester({
           </div>
           <h3 className="mt-1 text-lg font-bold text-slate-900">저지연 오디오 전사/번역 테스트</h3>
           <p className="mt-1 text-sm text-slate-500">
-            YouTube 탭 또는 라이브 방송 오디오를 16kHz PCM frame으로 서버에 보내 Gemini Live API로 전사합니다.
+            사용자 화면의 영상 자체가 자동 번역을 시작하지는 않습니다. 이 버튼으로 YouTube 탭 또는 라이브 방송 탭의 오디오를 캡처해 Gemini Live API로 보냅니다.
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
@@ -233,7 +240,8 @@ export default function LiveAudioTranslationTester({
       </div>
 
       <p className="mt-3 text-xs leading-relaxed text-slate-500">
-        Chrome에서 YouTube 탭을 선택하고 `Share tab audio`를 켜세요. 이 경로는 HTTP chunk보다 지연이 낮지만,
+        Chrome 공유 창에서 오디오가 재생 중인 탭을 선택하고 `Share tab audio`를 켜세요. `/live/...` 사용자 화면은 여기서 publish된 자막을 받는 표시용 화면입니다.
+        이 경로는 HTTP chunk보다 지연이 낮지만,
         실제 응답 시간은 Gemini Live API 상태와 네트워크에 영향을 받습니다.
       </p>
     </div>

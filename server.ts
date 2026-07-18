@@ -999,6 +999,16 @@ interface LiveServerMessageLike {
     modelTurn?: {
       parts?: Array<{ text?: string }>;
     };
+    inputTranscription?: {
+      text?: string;
+      finished?: boolean;
+      languageCode?: string;
+    };
+    interimInputTranscription?: {
+      text?: string;
+      finished?: boolean;
+      languageCode?: string;
+    };
     turnComplete?: boolean;
   };
 }
@@ -1009,10 +1019,31 @@ function sendAudioLiveSocketMessage(socket: WebSocket, payload: unknown) {
 }
 
 function extractLiveText(message: LiveServerMessageLike) {
+  const inputTranscription = message.serverContent?.inputTranscription?.text?.trim();
+  if (inputTranscription) return inputTranscription;
+
+  const interimInputTranscription = message.serverContent?.interimInputTranscription?.text?.trim();
+  if (interimInputTranscription) return interimInputTranscription;
+
   return message.serverContent?.modelTurn?.parts
     ?.map((part) => part.text ?? "")
     .join("")
     .trim() ?? "";
+}
+
+function getLiveAudioLanguageCode(languageCode: string) {
+  const normalizedLanguageCode = languageCode.toLowerCase();
+  const bcp47LanguageCodes: Record<string, string> = {
+    ar: "ar",
+    zh: "zh-CN",
+    en: "en-US",
+    fr: "fr-FR",
+    ko: "ko-KR",
+    ru: "ru-RU",
+    es: "es-ES"
+  };
+
+  return bcp47LanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
 }
 
 function createLiveCaptionPublisher({
@@ -1096,6 +1127,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           model: GEMINI_LIVE_MODEL,
           config: {
             responseModalities: ["TEXT"],
+            inputAudioTranscription: {
+              languageHints: {
+                languageCodes: [getLiveAudioLanguageCode(sourceLang)]
+              }
+            },
             systemInstruction: `You are a real-time medical conference transcription engine.
 Listen to the incoming ${getLanguageLabel(sourceLang)} audio and output only concise spoken transcript text in ${getLanguageLabel(sourceLang)}.
 Do not translate. Do not add explanations. Emit only words that were spoken.`
@@ -1114,6 +1150,7 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
               }
             },
             onerror: (error: Error) => {
+              const message = error instanceof Error ? error.message : String(error);
               recordTranslationError({
                 error,
                 text: "[Gemini Live audio session]",
@@ -1122,12 +1159,17 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
               });
               sendAudioLiveSocketMessage(socket, {
                 type: "error",
-                message: error.message
+                message
               });
             },
-            onclose: () => {
+            onclose: (event: { code?: number; reason?: string; wasClean?: boolean }) => {
+              const closeCode = event?.code;
+              const closeReason = event?.reason || "";
               sendAudioLiveSocketMessage(socket, {
-                type: "closed"
+                type: "closed",
+                code: closeCode,
+                reason: closeReason,
+                wasClean: event?.wasClean
               });
             }
           }
