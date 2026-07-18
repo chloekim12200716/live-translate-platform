@@ -17,7 +17,7 @@ app.use(express.json());
 // Initialize Gemini SDK with fallback
 let aiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 
@@ -261,6 +261,9 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
         })
       ]);
       const translatedText = response.text?.trim() || "";
+      if (!translatedText) {
+        throw new Error("Gemini translation returned an empty response.");
+      }
       return {
         translatedText,
         engine: `Gemini ${GEMINI_MODEL}`,

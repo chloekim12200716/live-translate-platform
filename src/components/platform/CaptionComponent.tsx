@@ -6,6 +6,7 @@ const captionByLanguage: Record<string, string> = {
   zh: "今天我们将回顾双靶向治疗的临床试验，以及其对心血管和肾脏保护的意义。",
   en: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
   fr: "Aujourd'hui, nous allons examiner les essais cliniques des thérapies à double cible et leur impact cardiométabolique.",
+  ko: "오늘 우리는 이중 표적 치료제의 임상 시험과 심혈관 대사 영향에 대해 검토하겠습니다.",
   ru: "Сегодня мы рассмотрим клинические исследования препаратов двойного действия и их кардиометаболическое значение.",
   es: "Hoy revisaremos los ensayos clínicos de las terapias de doble objetivo y su impacto cardiometabólico."
 };
@@ -108,7 +109,8 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
     eventSource.addEventListener("caption", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as StreamCaptionPayload;
       const translatedText = data.translatedText?.trim() || "";
-      setCaption(translatedText || (data.isFinal ? data.sourceText || fallbackCaption : ""));
+      const shouldShowSourceText = normalizedLanguage === normalizedSourceLanguage;
+      setCaption(translatedText || (data.isFinal && shouldShowSourceText ? data.sourceText || fallbackCaption : ""));
       setEngine(data.isFinal ? data.engine || "Live Caption Stream" : "Caption Queue");
       setSequence(data.sequence || 0);
       setIsLoading(false);
