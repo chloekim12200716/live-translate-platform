@@ -1158,6 +1158,21 @@ function getLiveAudioLanguageCode(languageCode: string) {
   return bcp47LanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
 }
 
+function getLiveTranslateTargetLanguageCode(languageCode: string) {
+  const normalizedLanguageCode = languageCode.toLowerCase();
+  const targetLanguageCodes: Record<string, string> = {
+    ar: "ar",
+    zh: "zh-CN",
+    en: "en",
+    fr: "fr",
+    ko: "ko",
+    ru: "ru",
+    es: "es"
+  };
+
+  return targetLanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
+}
+
 function summarizeLiveServerMessage(message: LiveServerMessageLike) {
   const serverContent = message.serverContent;
   const summary = [
@@ -1415,7 +1430,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             translationConfig: {
-              targetLanguageCode: getLiveAudioLanguageCode(targetLang),
+              targetLanguageCode: getLiveTranslateTargetLanguageCode(targetLang),
               echoTargetLanguage: true
             },
           },
