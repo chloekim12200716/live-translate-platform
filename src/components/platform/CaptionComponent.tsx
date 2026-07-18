@@ -215,18 +215,20 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           <Languages className="h-4 w-4" />
           {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
         </div>
-        <div className="flex min-h-[4.25rem] flex-col justify-end gap-1 text-lg font-semibold leading-relaxed text-yellow-50 md:text-2xl">
+        <div className="relative h-[4.6rem] overflow-hidden text-lg font-semibold leading-snug text-yellow-50 md:h-[5rem] md:text-2xl">
           {isLoading || captionLines.length === 0 ? (
             <p>&nbsp;</p>
           ) : (
-            captionLines.map((line, index) => (
-              <p
-                key={line.key}
-                className={index === captionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}
-              >
-                {line.text}
-              </p>
-            ))
+            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1">
+              {captionLines.map((line, index) => (
+                <p
+                  key={line.key}
+                  className={index === captionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}
+                >
+                  {line.text}
+                </p>
+              ))}
+            </div>
           )}
         </div>
       </div>
