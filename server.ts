@@ -1136,19 +1136,6 @@ function sendAudioLiveSocketMessage(socket: WebSocket, payload: unknown) {
   socket.send(JSON.stringify(payload));
 }
 
-function extractLiveText(message: LiveServerMessageLike) {
-  const inputTranscription = message.serverContent?.inputTranscription?.text?.trim();
-  if (inputTranscription) return inputTranscription;
-
-  const interimInputTranscription = message.serverContent?.interimInputTranscription?.text?.trim();
-  if (interimInputTranscription) return interimInputTranscription;
-
-  return message.serverContent?.modelTurn?.parts
-    ?.map((part) => part.text ?? "")
-    .join("")
-    .trim() ?? "";
-}
-
 function getLiveAudioLanguageCode(languageCode: string) {
   const normalizedLanguageCode = languageCode.toLowerCase();
   const bcp47LanguageCodes: Record<string, string> = {
@@ -1216,6 +1203,99 @@ function createLiveCaptionPublisher({
   };
 }
 
+function normalizeTranscriptText(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function shouldPublishTranscriptText(text: string) {
+  const normalizedText = normalizeTranscriptText(text);
+  if (normalizedText.length < 18) return false;
+  if (!/\s/.test(normalizedText)) return false;
+  if (!/[a-zA-Z가-힣\u0600-\u06ff\u0400-\u04ff\u4e00-\u9fff]/.test(normalizedText)) return false;
+  return true;
+}
+
+function createLiveTranscriptBuffer({
+  socket,
+  publishTranscript
+}: {
+  socket: WebSocket;
+  publishTranscript: (text: string, engine?: string) => void;
+}) {
+  let pendingText = "";
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearDebounceTimer = () => {
+    if (!debounceTimer) return;
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  };
+
+  const flush = (reason: string) => {
+    clearDebounceTimer();
+    const normalizedText = normalizeTranscriptText(pendingText);
+    pendingText = "";
+
+    if (!shouldPublishTranscriptText(normalizedText)) {
+      if (normalizedText) {
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `transcript ignored (${reason}): ${normalizedText}`
+        });
+      }
+      return;
+    }
+
+    sendAudioLiveSocketMessage(socket, {
+      type: "debug",
+      message: `transcript flushed (${reason}): ${normalizedText.length} chars`
+    });
+    publishTranscript(normalizedText);
+  };
+
+  const scheduleDebouncedFlush = () => {
+    clearDebounceTimer();
+    debounceTimer = setTimeout(() => flush("debounce"), 1400);
+  };
+
+  return {
+    handleLiveMessage(message: LiveServerMessageLike) {
+      const serverContent = message.serverContent;
+      const finalText = serverContent?.inputTranscription?.text?.trim() || "";
+      const interimText = serverContent?.interimInputTranscription?.text?.trim() || "";
+      const modelText = serverContent?.modelTurn?.parts
+        ?.map((part) => part.text ?? "")
+        .join("")
+        .trim() ?? "";
+
+      if (interimText) {
+        pendingText = interimText;
+        scheduleDebouncedFlush();
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `interim transcript buffered: ${interimText.length} chars`
+        });
+      }
+
+      if (finalText) {
+        pendingText = finalText;
+        if (serverContent?.inputTranscription?.finished !== false) {
+          flush("final");
+        } else {
+          scheduleDebouncedFlush();
+        }
+      }
+
+      if (modelText) {
+        pendingText = modelText;
+        flush("modelTurn");
+      }
+    },
+    flush,
+    dispose: clearDebounceTimer
+  };
+}
+
 function installAudioLiveWebSocketServer(server: HttpServer) {
   const audioLiveWss = new WebSocketServer({ noServer: true });
 
@@ -1230,6 +1310,10 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     let audioFrameCount = 0;
     let liveServerMessageCount = 0;
     const publishLiveTranscript = createLiveCaptionPublisher({ socket, sessionSlug, sourceLang });
+    const liveTranscriptBuffer = createLiveTranscriptBuffer({
+      socket,
+      publishTranscript: publishLiveTranscript
+    });
 
     const flushPendingFrames = () => {
       if (!liveSession) return;
@@ -1284,15 +1368,7 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
             },
             onmessage: (message: LiveServerMessageLike) => {
               liveServerMessageCount += 1;
-              const text = extractLiveText(message);
-              if (text) {
-                sendAudioLiveSocketMessage(socket, {
-                  type: "debug",
-                  message: `Live message #${liveServerMessageCount}: transcript ${text.length} chars`
-                });
-                publishLiveTranscript(text);
-                return;
-              }
+              liveTranscriptBuffer.handleLiveMessage(message);
 
               if (liveServerMessageCount <= 8 || liveServerMessageCount % 20 === 0) {
                 sendAudioLiveSocketMessage(socket, {
@@ -1364,6 +1440,7 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
             publishLiveTranscript(message.text, "Client Text Frame");
           }
           if (message.type === "end") {
+            liveTranscriptBuffer.flush("client-end");
             liveSession?.sendRealtimeInput({ audioStreamEnd: true });
           }
         } catch {
@@ -1407,6 +1484,8 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
 
     socket.on("close", () => {
       isClosed = true;
+      liveTranscriptBuffer.flush("socket-close");
+      liveTranscriptBuffer.dispose();
       try {
         liveSession?.sendRealtimeInput({ audioStreamEnd: true });
       } catch {
