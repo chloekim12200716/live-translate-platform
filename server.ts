@@ -998,6 +998,7 @@ interface GeminiLiveSessionLike {
 }
 
 interface LiveServerMessageLike {
+  setupComplete?: unknown;
   serverContent?: {
     modelTurn?: {
       parts?: Array<{ text?: string }>;
@@ -1012,8 +1013,16 @@ interface LiveServerMessageLike {
       finished?: boolean;
       languageCode?: string;
     };
+    generationComplete?: boolean;
+    waitingForInput?: boolean;
     turnComplete?: boolean;
   };
+  goAway?: {
+    timeLeft?: string;
+  };
+  usageMetadata?: unknown;
+  voiceActivity?: unknown;
+  voiceActivityDetectionSignal?: unknown;
 }
 
 function sendAudioLiveSocketMessage(socket: WebSocket, payload: unknown) {
@@ -1047,6 +1056,25 @@ function getLiveAudioLanguageCode(languageCode: string) {
   };
 
   return bcp47LanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
+}
+
+function summarizeLiveServerMessage(message: LiveServerMessageLike) {
+  const serverContent = message.serverContent;
+  const summary = [
+    message.setupComplete ? "setupComplete" : "",
+    serverContent?.inputTranscription ? "inputTranscription" : "",
+    serverContent?.interimInputTranscription ? "interimInputTranscription" : "",
+    serverContent?.modelTurn ? "modelTurn" : "",
+    serverContent?.turnComplete ? "turnComplete" : "",
+    serverContent?.generationComplete ? "generationComplete" : "",
+    serverContent?.waitingForInput ? "waitingForInput" : "",
+    message.goAway ? `goAway:${message.goAway.timeLeft ?? ""}` : "",
+    message.usageMetadata ? "usageMetadata" : "",
+    message.voiceActivity ? "voiceActivity" : "",
+    message.voiceActivityDetectionSignal ? "voiceActivityDetectionSignal" : ""
+  ].filter(Boolean);
+
+  return summary.join(", ") || "empty-message";
 }
 
 function createLiveCaptionPublisher({
@@ -1093,6 +1121,8 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     const pendingFrames: Buffer[] = [];
     let liveSession: GeminiLiveSessionLike | null = null;
     let isClosed = false;
+    let audioFrameCount = 0;
+    let liveServerMessageCount = 0;
     const publishLiveTranscript = createLiveCaptionPublisher({ socket, sessionSlug, sourceLang });
 
     const flushPendingFrames = () => {
@@ -1147,9 +1177,22 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
               });
             },
             onmessage: (message: LiveServerMessageLike) => {
+              liveServerMessageCount += 1;
               const text = extractLiveText(message);
               if (text) {
+                sendAudioLiveSocketMessage(socket, {
+                  type: "debug",
+                  message: `Live message #${liveServerMessageCount}: transcript ${text.length} chars`
+                });
                 publishLiveTranscript(text);
+                return;
+              }
+
+              if (liveServerMessageCount <= 8 || liveServerMessageCount % 20 === 0) {
+                sendAudioLiveSocketMessage(socket, {
+                  type: "debug",
+                  message: `Live message #${liveServerMessageCount}: ${summarizeLiveServerMessage(message)}`
+                });
               }
             },
             onerror: (error: Error) => {
@@ -1233,6 +1276,13 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
           : Buffer.from(data);
 
       if (!frame.length) return;
+      audioFrameCount += 1;
+      if (audioFrameCount === 1 || audioFrameCount % 50 === 0) {
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `audio frame received #${audioFrameCount} (${frame.length} bytes)`
+        });
+      }
       if (!liveSession) {
         pendingFrames.push(frame);
         if (pendingFrames.length > 80) {
