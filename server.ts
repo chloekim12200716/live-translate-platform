@@ -1126,7 +1126,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         liveSession = await (aiClient as any).live.connect({
           model: GEMINI_LIVE_MODEL,
           config: {
-            responseModalities: ["TEXT"],
+            responseModalities: ["AUDIO"],
             inputAudioTranscription: {
               languageHints: {
                 languageCodes: [getLiveAudioLanguageCode(sourceLang)]
