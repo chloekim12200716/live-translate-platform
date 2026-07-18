@@ -31,6 +31,24 @@ interface StreamReadyPayload {
   queuedCaptions?: number;
 }
 
+interface CaptionLine {
+  key: string;
+  text: string;
+  comparisonKey: string;
+}
+
+function createCaptionLine(text: string, key = `caption-${Date.now()}`): CaptionLine {
+  return { key, text, comparisonKey: getCaptionComparisonKey(text) };
+}
+
+function getCaptionComparisonKey(text: string) {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/[.!?。！？]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function getCaptionDisplayText({
   translatedText,
   sourceText,
@@ -55,7 +73,7 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
   const fallbackCaption = normalizedLanguage === normalizedSourceLanguage
     ? sourceText
     : captionByLanguage[normalizedLanguage] ?? captionByLanguage.en;
-  const [captionLines, setCaptionLines] = useState<string[]>(fallbackCaption ? [fallbackCaption] : []);
+  const [captionLines, setCaptionLines] = useState<CaptionLine[]>(fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
   const [engine, setEngine] = useState(normalizedLanguage === normalizedSourceLanguage ? "Source Caption" : "Local Mock Caption");
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
@@ -65,7 +83,7 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
     let eventSource: EventSource | null = null;
     let didFallbackToTranslateApi = false;
 
-    setCaptionLines(fallbackCaption ? [fallbackCaption] : []);
+    setCaptionLines(fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
     setIsLoading(true);
     setSequence(0);
 
@@ -89,12 +107,12 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
         })
         .then((data: { translatedText?: string; engine?: string }) => {
           const nextCaption = data.translatedText?.trim() || fallbackCaption;
-          setCaptionLines(nextCaption ? [nextCaption] : []);
+          setCaptionLines(nextCaption ? [createCaptionLine(nextCaption, "single-translation")] : []);
           setEngine(data.engine || "Translation API Fallback");
         })
         .catch((error: Error) => {
           if (controller.signal.aborted) return;
-          setCaptionLines(fallbackCaption ? [fallbackCaption] : []);
+          setCaptionLines(fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
           setEngine("Local Mock Caption");
         })
         .finally(() => {
@@ -137,7 +155,25 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
         shouldShowSourceText
       });
       if (nextCaption) {
-        setCaptionLines((currentLines) => [...currentLines, nextCaption].slice(-2));
+        const nextKey = data.id || `sequence-${data.sequence ?? Date.now()}`;
+        const nextLine = createCaptionLine(nextCaption, nextKey);
+        setCaptionLines((currentLines) => {
+          const lastLine = currentLines[currentLines.length - 1];
+          if (lastLine?.key === nextKey || lastLine?.comparisonKey === nextLine.comparisonKey) {
+            return [...currentLines.slice(0, -1), nextLine].slice(-2);
+          }
+
+          const existingIndex = currentLines.findIndex((line) => (
+            line.key === nextKey || line.comparisonKey === nextLine.comparisonKey
+          ));
+          if (existingIndex !== -1) {
+            const updatedLines = [...currentLines];
+            updatedLines[existingIndex] = nextLine;
+            return updatedLines.slice(-2);
+          }
+
+          return [...currentLines, nextLine].slice(-2);
+        });
       }
       setEngine(data.isFinal ? data.engine || "Live Caption Stream" : "Caption Queue");
       setSequence(data.sequence || 0);
@@ -185,10 +221,10 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           ) : (
             captionLines.map((line, index) => (
               <p
-                key={`${line}-${index}`}
+                key={line.key}
                 className={index === captionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}
               >
-                {line}
+                {line.text}
               </p>
             ))
           )}

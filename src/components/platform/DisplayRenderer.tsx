@@ -32,6 +32,14 @@ interface TranscriptEntry {
   isFinal: boolean;
 }
 
+function getTranscriptComparisonKey(text: string) {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/[.!?。！？]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function renderComponent(component: PlatformLayoutComponent, session: PlatformSession, languageCode: string) {
   switch (component.type) {
     case "video":
@@ -79,7 +87,11 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
           sequence: detail.sequence ?? currentEntries.length + 1,
           isFinal: Boolean(detail.isFinal)
         };
-        const existingIndex = currentEntries.findIndex((entry) => entry.id === nextEntry.id);
+        const nextComparisonKey = getTranscriptComparisonKey(nextEntry.translatedText);
+        const existingIndex = currentEntries.findIndex((entry) => (
+          entry.id === nextEntry.id
+          || getTranscriptComparisonKey(entry.translatedText) === nextComparisonKey
+        ));
 
         if (existingIndex === -1) {
           return [...currentEntries, nextEntry]
