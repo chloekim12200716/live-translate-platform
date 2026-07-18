@@ -1241,7 +1241,7 @@ function normalizeTranscriptText(text: string) {
 
 function shouldPublishTranscriptText(text: string) {
   const normalizedText = normalizeTranscriptText(text);
-  if (normalizedText.length < 10) return false;
+  if (normalizedText.length < 22) return false;
   if (!/\s/.test(normalizedText)) return false;
   if (!/[a-zA-Z가-힣\u0600-\u06ff\u0400-\u04ff\u4e00-\u9fff]/.test(normalizedText)) return false;
   return true;
@@ -1253,9 +1253,8 @@ function shouldFlushTranscriptNow(text: string) {
 
   if (/[.!?。！？]$/.test(normalizedText)) return true;
   if (/[.!?。！？][)"'\]]?$/.test(normalizedText)) return true;
-  if (normalizedText.length >= 90) return true;
-  if (normalizedText.length >= 55 && /[,;:，；：]$/.test(normalizedText)) return true;
   if (/[가-힣]$/.test(normalizedText) && /(다|요|죠|니다|습니다|까요|네요)[.!?。！？]?$/.test(normalizedText)) return true;
+  if (normalizedText.length >= 140) return true;
 
   return false;
 }
@@ -1340,7 +1339,7 @@ function createLiveTranscriptBuffer({
 
   const scheduleDebouncedFlush = () => {
     clearDebounceTimer();
-    debounceTimer = setTimeout(() => flush("debounce"), 700);
+    debounceTimer = setTimeout(() => flush("debounce"), 1300);
   };
 
   return {
