@@ -401,6 +401,7 @@ if (API_KEY && API_KEY !== "MY_GEMINI_API_KEY") {
     aiClient = new GoogleGenAI({
       apiKey: API_KEY,
       httpOptions: {
+        apiVersion: GEMINI_LIVE_API_VERSION,
         headers: {
           'User-Agent': 'aistudio-build',
         }
@@ -1410,9 +1411,6 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         liveSession = await (aiClient as any).live.connect({
           model: GEMINI_LIVE_MODEL,
           config: {
-            httpOptions: {
-              apiVersion: GEMINI_LIVE_API_VERSION
-            },
             responseModalities: ["AUDIO"],
             inputAudioTranscription: {},
             outputAudioTranscription: {},
