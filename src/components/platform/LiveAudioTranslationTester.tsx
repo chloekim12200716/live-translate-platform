@@ -28,11 +28,12 @@ function float32ToPcm16Buffer(input: Float32Array) {
   return buffer;
 }
 
-function createLiveAudioWebSocketUrl(sessionSlug: string, sourceLanguageCode: string) {
+function createLiveAudioWebSocketUrl(sessionSlug: string, sourceLanguageCode: string, targetLanguageCode: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({
     sessionSlug,
     sourceLang: sourceLanguageCode,
+    targetLang: targetLanguageCode,
     mimeType: "audio/pcm;rate=16000"
   });
 
@@ -44,6 +45,7 @@ export default function LiveAudioTranslationTester({
   defaultSourceLanguageCode
 }: LiveAudioTranslationTesterProps) {
   const [sourceLanguageCode, setSourceLanguageCode] = useState(defaultSourceLanguageCode);
+  const [targetLanguageCode, setTargetLanguageCode] = useState("ko");
   const [isCapturing, setIsCapturing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [latestTranscript, setLatestTranscript] = useState("");
@@ -143,7 +145,7 @@ export default function LiveAudioTranslationTester({
       }
       pushDiagnosticEvent(`audio track selected: ${audioTracks[0]?.label || "unknown"}`);
 
-      const socket = new WebSocket(createLiveAudioWebSocketUrl(sessionSlug, sourceLanguageCode));
+      const socket = new WebSocket(createLiveAudioWebSocketUrl(sessionSlug, sourceLanguageCode, targetLanguageCode));
       socket.binaryType = "arraybuffer";
       socket.onopen = () => {
         setStatusMessage("Live API WebSocket 연결 중");
@@ -258,7 +260,7 @@ export default function LiveAudioTranslationTester({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[170px_minmax(0,1fr)_auto]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[170px_170px_minmax(0,1fr)_auto]">
         <label className="text-xs font-bold text-slate-700">
           입력 언어
           <select
@@ -275,8 +277,24 @@ export default function LiveAudioTranslationTester({
           </select>
         </label>
 
+        <label className="text-xs font-bold text-slate-700">
+          번역 언어
+          <select
+            value={targetLanguageCode}
+            onChange={(event) => setTargetLanguageCode(event.target.value)}
+            disabled={isCapturing}
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-400 disabled:opacity-60"
+          >
+            {sourceLanguageOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Latest Live Transcript</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Latest Translated Caption</p>
           <p className="mt-2 min-h-10 text-sm font-semibold leading-relaxed text-slate-900">
             {latestTranscript || "전사 결과 대기 중"}
           </p>

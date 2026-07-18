@@ -18,7 +18,8 @@ app.use(express.json());
 let aiClient: GoogleGenAI | null = null;
 const API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
-const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
+const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.5-live-translate-preview";
+const GEMINI_LIVE_API_VERSION = process.env.GEMINI_LIVE_API_VERSION || "v1alpha";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 
 const translationLanguageLabels: Record<string, string> = {
@@ -1114,6 +1115,11 @@ interface LiveServerMessageLike {
       finished?: boolean;
       languageCode?: string;
     };
+    outputTranscription?: {
+      text?: string;
+      finished?: boolean;
+      languageCode?: string;
+    };
     interimInputTranscription?: {
       text?: string;
       finished?: boolean;
@@ -1156,6 +1162,7 @@ function summarizeLiveServerMessage(message: LiveServerMessageLike) {
   const summary = [
     message.setupComplete ? "setupComplete" : "",
     serverContent?.inputTranscription ? "inputTranscription" : "",
+    serverContent?.outputTranscription ? "outputTranscription" : "",
     serverContent?.interimInputTranscription ? "interimInputTranscription" : "",
     serverContent?.modelTurn ? "modelTurn" : "",
     serverContent?.turnComplete ? "turnComplete" : "",
@@ -1301,7 +1308,8 @@ function createLiveTranscriptBuffer({
   return {
     handleLiveMessage(message: LiveServerMessageLike) {
       const serverContent = message.serverContent;
-      const finalText = serverContent?.inputTranscription?.text || "";
+      const outputText = serverContent?.outputTranscription?.text || "";
+      const inputText = serverContent?.inputTranscription?.text || "";
       const interimText = serverContent?.interimInputTranscription?.text || "";
       const modelText = serverContent?.modelTurn?.parts
         ?.map((part) => part.text ?? "")
@@ -1319,13 +1327,20 @@ function createLiveTranscriptBuffer({
         });
       }
 
-      if (finalText) {
+      if (inputText) {
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `input transcript observed: ${normalizeTranscriptText(inputText)}`
+        });
+      }
+
+      if (outputText) {
         hasFinalFragments = true;
-        pendingText = appendTranscriptFragment(pendingText, finalText);
+        pendingText = appendTranscriptFragment(pendingText, outputText);
         scheduleDebouncedFlush();
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
-          message: `final transcript fragment buffered: ${normalizeTranscriptText(finalText)}`
+          message: `translated transcript fragment buffered: ${normalizeTranscriptText(outputText)}`
         });
       }
 
@@ -1348,13 +1363,14 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
     const sessionSlug = getCaptionSessionKey(requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
     const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "en").toLowerCase();
+    const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
     const mimeType = requestUrl.searchParams.get("mimeType") || "audio/webm;codecs=opus";
     const pendingFrames: Buffer[] = [];
     let liveSession: GeminiLiveSessionLike | null = null;
     let isClosed = false;
     let audioFrameCount = 0;
     let liveServerMessageCount = 0;
-    const publishLiveTranscript = createLiveCaptionPublisher({ socket, sessionSlug, sourceLang });
+    const publishLiveTranscript = createLiveCaptionPublisher({ socket, sessionSlug, sourceLang: targetLang });
     const liveTranscriptBuffer = createLiveTranscriptBuffer({
       socket,
       publishTranscript: publishLiveTranscript
@@ -1394,15 +1410,16 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         liveSession = await (aiClient as any).live.connect({
           model: GEMINI_LIVE_MODEL,
           config: {
-            responseModalities: ["AUDIO"],
-            inputAudioTranscription: {
-              languageHints: {
-                languageCodes: [getLiveAudioLanguageCode(sourceLang)]
-              }
+            httpOptions: {
+              apiVersion: GEMINI_LIVE_API_VERSION
             },
-            systemInstruction: `You are a real-time medical conference transcription engine.
-Listen to the incoming ${getLanguageLabel(sourceLang)} audio and output only concise spoken transcript text in ${getLanguageLabel(sourceLang)}.
-Do not translate. Do not add explanations. Emit only words that were spoken.`
+            responseModalities: ["AUDIO"],
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            translationConfig: {
+              targetLanguageCode: getLiveAudioLanguageCode(targetLang),
+              echoTargetLanguage: true
+            },
           },
           callbacks: {
             onopen: () => {
@@ -1457,6 +1474,7 @@ Do not translate. Do not add explanations. Emit only words that were spoken.`
           type: "ready",
           sessionSlug,
           sourceLang,
+          targetLang,
           mimeType
         });
         flushPendingFrames();
