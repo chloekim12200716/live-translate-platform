@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Link2, Settings2, Upload, Video } from "lucide-react";
+import { ExternalLink, Settings2 } from "lucide-react";
 import {
   mockDisplayUrls,
   mockPlatformDisplays,
@@ -14,15 +14,7 @@ import {
   saveStoredLayout,
   saveStoredPlatformDisplays
 } from "../../data/platformLayoutStorage";
-import {
-  clearStoredVideoSource,
-  loadStoredVideoMetadata,
-  PlatformVideoSourceMetadata,
-  saveStoredVideoFile,
-  saveStoredVideoUrl
-} from "../../data/platformVideoStorage";
 import LiveAudioTranslationTester from "../../components/platform/LiveAudioTranslationTester";
-import LiveSpeechCaptionTester from "../../components/platform/LiveSpeechCaptionTester";
 
 const captionPlayerOptions = {
   languages: ["Arabic", "Chinese", "English", "French", "Korean", "Russian", "Spanish"],
@@ -33,6 +25,12 @@ const captionPlayerOptions = {
 };
 
 const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
+
+const livePreviewLanguages = [
+  { code: "en", label: "English" },
+  { code: "fr", label: "French" },
+  { code: "ko", label: "Korean" }
+];
 
 interface TranslationErrorLog {
   id: string;
@@ -52,12 +50,6 @@ function toSlug(value: string) {
     .replace(/^-+|-+$/g, "") || "platform";
 }
 
-function formatFileSize(size: number | undefined) {
-  if (!size) return "";
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export default function AdminSessionsPage() {
   const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformData.session.slug));
   const [newDisplayName, setNewDisplayName] = useState("");
@@ -65,13 +57,6 @@ export default function AdminSessionsPage() {
   const [newTemplateLayoutId, setNewTemplateLayoutId] = useState(mockPlatformData.layout.id);
   const [newDefaultLanguageCode, setNewDefaultLanguageCode] = useState("en");
   const [translationErrors, setTranslationErrors] = useState<TranslationErrorLog[]>([]);
-  const [videoMetadata, setVideoMetadata] = useState<PlatformVideoSourceMetadata | null>(() => loadStoredVideoMetadata(mockPlatformData.session.slug));
-  const [videoUrlInput, setVideoUrlInput] = useState(() => {
-    const metadata = loadStoredVideoMetadata(mockPlatformData.session.slug);
-    return metadata?.sourceType === "url" ? metadata.url ?? "" : mockPlatformData.session.videoUrl;
-  });
-  const [isVideoSaving, setIsVideoSaving] = useState(false);
-  const [videoStatusMessage, setVideoStatusMessage] = useState("");
   const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
   const displayUrls = [
     ...mockDisplayUrls,
@@ -146,54 +131,6 @@ export default function AdminSessionsPage() {
       .catch(() => undefined);
   };
 
-  const handleSaveVideoUrl = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const url = videoUrlInput.trim();
-    if (!url) return;
-
-    setIsVideoSaving(true);
-    saveStoredVideoUrl(mockPlatformData.session.slug, url)
-      .then((metadata) => {
-        setVideoMetadata(metadata);
-        setVideoStatusMessage("영상 URL이 저장되었습니다.");
-      })
-      .catch((error: Error) => {
-        setVideoStatusMessage(`영상 URL 저장 실패: ${error.message}`);
-      })
-      .finally(() => setIsVideoSaving(false));
-  };
-
-  const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    setIsVideoSaving(true);
-    saveStoredVideoFile(mockPlatformData.session.slug, file)
-      .then((metadata) => {
-        setVideoMetadata(metadata);
-        setVideoStatusMessage("테스트 영상 파일이 저장되었습니다.");
-      })
-      .catch((error: Error) => {
-        setVideoStatusMessage(`영상 파일 저장 실패: ${error.message}`);
-      })
-      .finally(() => setIsVideoSaving(false));
-  };
-
-  const handleResetVideoSource = () => {
-    setIsVideoSaving(true);
-    clearStoredVideoSource(mockPlatformData.session.slug)
-      .then(() => {
-        setVideoMetadata(null);
-        setVideoUrlInput(mockPlatformData.session.videoUrl);
-        setVideoStatusMessage("기본 샘플 영상으로 복원되었습니다.");
-      })
-      .catch((error: Error) => {
-        setVideoStatusMessage(`영상 소스 초기화 실패: ${error.message}`);
-      })
-      .finally(() => setIsVideoSaving(false));
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -244,104 +181,64 @@ export default function AdminSessionsPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Video className="h-4 w-4 text-indigo-600" />
-              <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Live Video Test Source</p>
-            </div>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">테스트 영상 지정</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              YouTube URL, 직접 재생 가능한 mp4/webm URL, 로컬 영상 파일을 지정하면 `/live` 화면의 Video 컴포넌트에서 재생합니다.
-            </p>
-          </div>
-          <Link
-            to={`/live/${mockPlatformData.session.slug}/en`}
-            className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
-          >
-            라이브에서 확인
-          </Link>
-        </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="space-y-3">
-            <form onSubmit={handleSaveVideoUrl} className="flex flex-col gap-2 sm:flex-row">
-              <label className="min-w-0 flex-1">
-                <span className="sr-only">영상 URL</span>
-                <input
-                  value={videoUrlInput}
-                  onChange={(event) => setVideoUrlInput(event.target.value)}
-                  placeholder="https://youtu.be/... 또는 https://.../sample.mp4"
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={isVideoSaving}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Link2 className="h-3.5 w-3.5" />
-                URL 저장
-              </button>
-            </form>
-
-            <div className="flex flex-wrap gap-2">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
-                <Upload className="h-3.5 w-3.5" />
-                로컬 영상 파일 선택
-                <input
-                  type="file"
-                  accept="video/*"
-                  onChange={handleVideoFileChange}
-                  className="sr-only"
-                  disabled={isVideoSaving}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={handleResetVideoSource}
-                disabled={isVideoSaving}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                기본 영상 복원
-              </button>
-            </div>
-            {videoStatusMessage && (
-              <p className="text-xs font-semibold text-indigo-700">{videoStatusMessage}</p>
-            )}
-            <p className="text-xs leading-relaxed text-slate-500">
-              YouTube는 iframe embed로 재생합니다. Google Drive 공유 페이지처럼 직접 재생 URL이 아닌 주소는 재생되지 않을 수 있습니다.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Current Source</p>
-            <p className="mt-2 text-sm font-bold text-slate-900">
-              {videoMetadata?.sourceType === "file"
-                ? videoMetadata.fileName
-                : videoMetadata?.sourceType === "url"
-                  ? "Custom URL"
-                  : "Default sample video"}
-            </p>
-            <p className="mt-1 break-all text-xs text-slate-500">
-              {videoMetadata?.sourceType === "file"
-                ? `${videoMetadata.fileType || "video"} · ${formatFileSize(videoMetadata.fileSize)}`
-                : videoMetadata?.url ?? mockPlatformData.session.videoUrl}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <LiveSpeechCaptionTester
-        sessionSlug={mockPlatformData.session.slug}
-        defaultSourceLanguageCode={mockPlatformData.session.sourceLanguageCode}
-      />
-
       <LiveAudioTranslationTester
         sessionSlug={mockPlatformData.session.slug}
         defaultSourceLanguageCode={mockPlatformData.session.sourceLanguageCode}
       />
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Viewer Verification</p>
+            <h3 className="text-lg font-bold text-slate-900">언어별 사용자 화면 확인</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              WebSocket Live Audio 테스트에서 publish된 자막이 실제 사용자 URL에 표시되는지 관리자 화면 안과 별도 탭에서 함께 확인합니다.
+            </p>
+          </div>
+          <Link
+            to={`/live/${mockPlatformData.session.slug}/en`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
+          >
+            기본 사용자 탭 열기
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          {livePreviewLanguages.map((language) => {
+            const livePath = `/live/${mockPlatformData.session.slug}/${language.code}`;
+
+            return (
+              <article key={language.code} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{language.label}</p>
+                    <p className="font-mono text-[11px] text-indigo-600">{livePath}</p>
+                  </div>
+                  <Link
+                    to={livePath}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+                  >
+                    사용자 탭
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                <div className="aspect-video bg-slate-950">
+                  <iframe
+                    src={livePath}
+                    title={`${language.label} viewer preview`}
+                    className="h-full w-full border-0"
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
