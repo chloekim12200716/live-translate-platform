@@ -31,13 +31,31 @@ interface StreamReadyPayload {
   queuedCaptions?: number;
 }
 
+function getCaptionDisplayText({
+  translatedText,
+  sourceText,
+  fallbackCaption,
+  isFinal,
+  shouldShowSourceText
+}: {
+  translatedText: string;
+  sourceText?: string;
+  fallbackCaption: string;
+  isFinal?: boolean;
+  shouldShowSourceText: boolean;
+}) {
+  if (translatedText) return translatedText;
+  if (isFinal && shouldShowSourceText) return sourceText || fallbackCaption;
+  return "";
+}
+
 export default function CaptionComponent({ languageCode, sessionSlug, sourceLanguageCode, sourceText }: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
   const fallbackCaption = normalizedLanguage === normalizedSourceLanguage
     ? sourceText
     : captionByLanguage[normalizedLanguage] ?? captionByLanguage.en;
-  const [caption, setCaption] = useState(fallbackCaption);
+  const [captionLines, setCaptionLines] = useState<string[]>(fallbackCaption ? [fallbackCaption] : []);
   const [engine, setEngine] = useState(normalizedLanguage === normalizedSourceLanguage ? "Source Caption" : "Local Mock Caption");
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
@@ -47,7 +65,7 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
     let eventSource: EventSource | null = null;
     let didFallbackToTranslateApi = false;
 
-    setCaption(fallbackCaption);
+    setCaptionLines(fallbackCaption ? [fallbackCaption] : []);
     setIsLoading(true);
     setSequence(0);
 
@@ -70,12 +88,13 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           return response.json();
         })
         .then((data: { translatedText?: string; engine?: string }) => {
-          setCaption(data.translatedText?.trim() || fallbackCaption);
+          const nextCaption = data.translatedText?.trim() || fallbackCaption;
+          setCaptionLines(nextCaption ? [nextCaption] : []);
           setEngine(data.engine || "Translation API Fallback");
         })
         .catch((error: Error) => {
           if (controller.signal.aborted) return;
-          setCaption(fallbackCaption);
+          setCaptionLines(fallbackCaption ? [fallbackCaption] : []);
           setEngine("Local Mock Caption");
         })
         .finally(() => {
@@ -104,13 +123,22 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
       const data = JSON.parse((event as MessageEvent).data) as StreamReadyPayload;
       setEngine("Caption Queue Connected");
       setIsLoading(false);
-      setCaption(data.queuedCaptions ? fallbackCaption : "");
+      setCaptionLines(data.queuedCaptions ? [] : []);
     });
     eventSource.addEventListener("caption", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as StreamCaptionPayload;
       const translatedText = data.translatedText?.trim() || "";
       const shouldShowSourceText = normalizedLanguage === normalizedSourceLanguage;
-      setCaption(translatedText || (data.isFinal && shouldShowSourceText ? data.sourceText || fallbackCaption : ""));
+      const nextCaption = getCaptionDisplayText({
+        translatedText,
+        sourceText: data.sourceText,
+        fallbackCaption,
+        isFinal: data.isFinal,
+        shouldShowSourceText
+      });
+      if (nextCaption) {
+        setCaptionLines((currentLines) => [...currentLines, nextCaption].slice(-2));
+      }
       setEngine(data.isFinal ? data.engine || "Live Caption Stream" : "Caption Queue");
       setSequence(data.sequence || 0);
       setIsLoading(false);
@@ -151,9 +179,20 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           <Languages className="h-4 w-4" />
           {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
         </div>
-        <p className="text-lg font-semibold leading-relaxed text-yellow-50 md:text-2xl">
-          {isLoading ? "" : caption}
-        </p>
+        <div className="flex min-h-[4.25rem] flex-col justify-end gap-1 text-lg font-semibold leading-relaxed text-yellow-50 md:text-2xl">
+          {isLoading || captionLines.length === 0 ? (
+            <p>&nbsp;</p>
+          ) : (
+            captionLines.map((line, index) => (
+              <p
+                key={`${line}-${index}`}
+                className={index === captionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}
+              >
+                {line}
+              </p>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
