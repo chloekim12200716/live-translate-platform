@@ -478,6 +478,13 @@ export default function SessionLayoutEditorPage() {
             >
               저장 후 미리보기
             </Link>
+            <Link
+              to={`/live/${mockPlatformSession.slug}/ko?layoutId=${selectedBaseLayout.id}&overlay=caption`}
+              onClick={handleSaveLayout}
+              className="flex-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-emerald-700 sm:flex-none"
+            >
+              자막 오버레이
+            </Link>
           </div>
         </div>
       </div>

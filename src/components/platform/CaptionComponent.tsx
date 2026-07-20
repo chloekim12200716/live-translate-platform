@@ -21,6 +21,8 @@ interface CaptionComponentProps {
   sourceLanguageCode: string;
   sourceText: string;
   style?: PlatformCaptionStyle;
+  isOverlay?: boolean;
+  transparentBackground?: boolean;
 }
 
 interface StreamCaptionPayload {
@@ -72,7 +74,15 @@ function getCaptionDisplayText({
   return "";
 }
 
-export default function CaptionComponent({ languageCode, sessionSlug, sourceLanguageCode, sourceText, style }: CaptionComponentProps) {
+export default function CaptionComponent({
+  languageCode,
+  sessionSlug,
+  sourceLanguageCode,
+  sourceText,
+  style,
+  isOverlay = false,
+  transparentBackground = false
+}: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
   const captionStyle = { ...defaultCaptionStyle, ...style };
@@ -250,16 +260,25 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
   const visibleCaptionLines = shouldShowOnlyLatestCaption && captionLines.length > 0
     ? captionLines.slice(-1)
     : captionLines.slice(-2);
+  const shouldUseTransparentTextBackground = transparentBackground || captionStyle.textBackgroundTransparent;
 
   return (
-    <div className="flex h-full min-h-0 items-center justify-center overflow-hidden rounded-lg border border-yellow-200/20 bg-slate-950/90 px-5 py-3 text-center text-white shadow-2xl backdrop-blur md:px-6">
+    <div
+      className={`flex h-full min-h-0 items-center justify-center overflow-hidden text-center text-white ${
+        transparentBackground
+          ? "bg-transparent px-2 py-1"
+          : "rounded-lg border border-yellow-200/20 bg-slate-950/90 px-5 py-3 shadow-2xl backdrop-blur md:px-6"
+      }`}
+    >
       <div className="flex h-full min-h-0 w-full max-w-5xl flex-col justify-center">
-        <div className="flex shrink-0 items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-yellow-200 md:text-[11px]">
-          <Languages className="h-4 w-4" />
-          {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
-        </div>
+        {!isOverlay && (
+          <div className="flex shrink-0 items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-yellow-200 md:text-[11px]">
+            <Languages className="h-4 w-4" />
+            {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
+          </div>
+        )}
         <div
-          className="relative mt-2 min-h-0 flex-1 overflow-hidden font-semibold leading-snug"
+          className={`relative min-h-0 flex-1 overflow-hidden font-semibold leading-snug ${isOverlay ? "" : "mt-2"}`}
           style={{
             color: captionStyle.textColor,
             fontFamily: captionStyle.fontFamily,
@@ -288,7 +307,7 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
                 >
                   <span
                     className="box-decoration-clone rounded px-2 py-0.5"
-                    style={{ backgroundColor: captionStyle.textBackgroundColor }}
+                    style={{ backgroundColor: shouldUseTransparentTextBackground ? "transparent" : captionStyle.textBackgroundColor }}
                   >
                     {line.text}
                   </span>

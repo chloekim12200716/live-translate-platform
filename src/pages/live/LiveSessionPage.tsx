@@ -14,6 +14,9 @@ export default function LiveSessionPage() {
   const [searchParams] = useSearchParams();
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
   const requestedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
+  const overlayMode = searchParams.get("overlay") === "caption" ? "caption" : "none";
+  const transparentBackground = overlayMode === "caption"
+    || ["1", "true", "yes"].includes((searchParams.get("transparent") ?? "").toLowerCase());
   const fallbackLayout = mockPlatformLayouts.find((layout) => layout.id === requestedLayoutId)
     ?? loadStoredLayoutById(mockPlatformSession.slug, requestedLayoutId)
     ?? mockPlatformLayout;
@@ -28,6 +31,8 @@ export default function LiveSessionPage() {
       layout={layout}
       session={mockPlatformSession}
       languageCode={resolvedLanguage}
+      overlayMode={overlayMode}
+      transparentBackground={transparentBackground}
     />
   );
 }

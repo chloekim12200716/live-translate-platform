@@ -36,6 +36,7 @@ export interface PlatformCaptionStyle {
   fontSizePx: number;
   fontFamily: string;
   textBackgroundColor: string;
+  textBackgroundTransparent: boolean;
   textColor: string;
 }
 
@@ -43,6 +44,7 @@ export const defaultCaptionStyle: PlatformCaptionStyle = {
   fontSizePx: 28,
   fontFamily: "Pretendard, Inter, system-ui, sans-serif",
   textBackgroundColor: "#020617",
+  textBackgroundTransparent: false,
   textColor: "#fef9c3"
 };
 

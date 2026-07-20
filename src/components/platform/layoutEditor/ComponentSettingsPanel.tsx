@@ -182,16 +182,27 @@ export default function ComponentSettingsPanel({
                   <input
                     type="color"
                     value={captionStyle.textBackgroundColor}
+                    disabled={captionStyle.textBackgroundTransparent}
                     onChange={(event) => updateCaptionStyle({ textBackgroundColor: event.target.value })}
-                    className="h-10 w-full rounded-lg border border-emerald-200 bg-white p-1"
+                    className="h-10 w-full rounded-lg border border-emerald-200 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </label>
               </div>
 
+              <label className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                <span className="text-xs font-bold text-slate-600">글자 배경 투명</span>
+                <input
+                  type="checkbox"
+                  checked={captionStyle.textBackgroundTransparent}
+                  onChange={(event) => updateCaptionStyle({ textBackgroundTransparent: event.target.checked })}
+                  className="h-4 w-4 accent-emerald-600"
+                />
+              </label>
+
               <div
                 className="rounded-lg px-4 py-3 text-center font-bold leading-snug shadow-inner"
                 style={{
-                  backgroundColor: captionStyle.textBackgroundColor,
+                  backgroundColor: captionStyle.textBackgroundTransparent ? "transparent" : captionStyle.textBackgroundColor,
                   color: captionStyle.textColor,
                   fontFamily: captionStyle.fontFamily,
                   fontSize: `${Math.min(captionStyle.fontSizePx, 32)}px`

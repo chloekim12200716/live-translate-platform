@@ -20,6 +20,8 @@ interface DisplayRendererProps {
   layout: PlatformLayout;
   session: PlatformSession;
   languageCode: string;
+  overlayMode?: "none" | "caption";
+  transparentBackground?: boolean;
 }
 
 interface TranscriptEntry {
@@ -40,7 +42,19 @@ function getTranscriptComparisonKey(text: string) {
     .toLowerCase();
 }
 
-function renderComponent(component: PlatformLayoutComponent, session: PlatformSession, languageCode: string) {
+function renderComponent({
+  component,
+  session,
+  languageCode,
+  isOverlay,
+  transparentBackground
+}: {
+  component: PlatformLayoutComponent;
+  session: PlatformSession;
+  languageCode: string;
+  isOverlay: boolean;
+  transparentBackground: boolean;
+}) {
   switch (component.type) {
     case "video":
       return <VideoComponent session={session} />;
@@ -54,6 +68,8 @@ function renderComponent(component: PlatformLayoutComponent, session: PlatformSe
           sourceLanguageCode={session.sourceLanguageCode}
           sourceText={session.sampleCaptionText}
           style={component.captionStyle}
+          isOverlay={isOverlay}
+          transparentBackground={transparentBackground}
         />
       );
     case "qa":
@@ -65,8 +81,15 @@ function renderComponent(component: PlatformLayoutComponent, session: PlatformSe
   }
 }
 
-export default function DisplayRenderer({ layout, session, languageCode }: DisplayRendererProps) {
+export default function DisplayRenderer({
+  layout,
+  session,
+  languageCode,
+  overlayMode = "none",
+  transparentBackground = false
+}: DisplayRendererProps) {
   const canvasRatio = layout.canvasWidth / layout.canvasHeight;
+  const isCaptionOverlay = overlayMode === "caption";
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [transcriptEntries, setTranscriptEntries] = useState<TranscriptEntry[]>([]);
@@ -111,8 +134,8 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
   }, [languageCode]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 p-4 md:p-6">
-      {isHeaderVisible && (
+    <div className={`relative min-h-screen overflow-hidden ${transparentBackground ? "bg-transparent p-0" : "bg-slate-950 p-4 md:p-6"}`}>
+      {isHeaderVisible && !isCaptionOverlay && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-white">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Session</p>
@@ -138,21 +161,24 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
         </div>
       )}
 
-      <div className="flex justify-center">
+      <div className={isCaptionOverlay ? "h-screen w-screen" : "flex justify-center"}>
         <div
-          className="relative w-full overflow-hidden rounded-xl"
+          className={`relative overflow-hidden ${isCaptionOverlay ? "h-full w-full" : "w-full rounded-xl"}`}
           style={{
             aspectRatio: `${layout.canvasWidth} / ${layout.canvasHeight}`,
-            backgroundImage: `linear-gradient(rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.82)), url(${layout.backgroundImageUrl})`,
-            backgroundColor: layout.backgroundColor,
+            backgroundImage: transparentBackground ? "none" : `linear-gradient(rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.82)), url(${layout.backgroundImageUrl})`,
+            backgroundColor: transparentBackground ? "transparent" : layout.backgroundColor,
             backgroundPosition: `${layout.backgroundPositionX}% ${layout.backgroundPositionY}%`,
             backgroundRepeat: "no-repeat",
             backgroundSize: getBackgroundSize(layout.backgroundFit),
-            maxHeight: "calc(100vh - 8rem)",
-            maxWidth: `calc((100vh - 8rem) * ${canvasRatio})`
+            maxHeight: isCaptionOverlay ? undefined : "calc(100vh - 8rem)",
+            maxWidth: isCaptionOverlay ? undefined : `calc((100vh - 8rem) * ${canvasRatio})`
           }}
         >
-          {layout.components.filter((component) => component.visible !== false).map((component) => (
+          {layout.components
+            .filter((component) => component.visible !== false)
+            .filter((component) => !isCaptionOverlay || component.type === "caption")
+            .map((component) => (
             <section
               key={component.id}
               aria-label={component.label}
@@ -162,12 +188,19 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
                 zIndex: component.zIndex
               }}
             >
-              {renderComponent(component, session, languageCode)}
+              {renderComponent({
+                component,
+                session,
+                languageCode,
+                isOverlay: isCaptionOverlay,
+                transparentBackground: transparentBackground || isCaptionOverlay
+              })}
             </section>
           ))}
         </div>
       </div>
 
+      {!isCaptionOverlay && (
       <button
         type="button"
         onClick={() => setIsHeaderVisible((currentValue) => !currentValue)}
@@ -176,8 +209,9 @@ export default function DisplayRenderer({ layout, session, languageCode }: Displ
         {isHeaderVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         {isHeaderVisible ? "Hide Header" : "Show Header"}
       </button>
+      )}
 
-      {isTranscriptOpen && (
+      {isTranscriptOpen && !isCaptionOverlay && (
         <div className="fixed inset-y-0 right-0 z-[90] flex w-full max-w-md flex-col border-l border-white/10 bg-slate-950/95 text-white shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div>

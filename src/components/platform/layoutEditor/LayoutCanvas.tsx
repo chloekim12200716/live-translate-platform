@@ -146,7 +146,7 @@ export default function LayoutCanvas({
                   <span
                     className="box-decoration-clone rounded px-1.5 py-0.5"
                     style={{
-                      backgroundColor: captionStyle.textBackgroundColor,
+                      backgroundColor: captionStyle.textBackgroundTransparent ? "transparent" : captionStyle.textBackgroundColor,
                       color: captionStyle.textColor,
                       fontFamily: captionStyle.fontFamily,
                       fontSize: `${Math.max(10, Math.min(18, captionStyle.fontSizePx * 0.5))}px`
