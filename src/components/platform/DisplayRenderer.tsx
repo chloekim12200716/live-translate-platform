@@ -53,6 +53,7 @@ function renderComponent(component: PlatformLayoutComponent, session: PlatformSe
           sessionSlug={session.slug}
           sourceLanguageCode={session.sourceLanguageCode}
           sourceText={session.sampleCaptionText}
+          style={component.captionStyle}
         />
       );
     case "qa":

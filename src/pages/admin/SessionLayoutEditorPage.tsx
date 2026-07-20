@@ -9,6 +9,7 @@ import {
   Sparkles
 } from "lucide-react";
 import {
+  defaultCaptionStyle,
   mockPlatformLayout,
   mockPlatformLayouts,
   mockPlatformDisplays,
@@ -155,7 +156,10 @@ export default function SessionLayoutEditorPage() {
           y: nextY,
           w: nextW,
           h: nextH,
-          label: updates.type ? componentDisplayName(updates.type) : nextComponent.label
+          label: updates.type ? componentDisplayName(updates.type) : nextComponent.label,
+          captionStyle: nextComponent.type === "caption"
+            ? { ...defaultCaptionStyle, ...nextComponent.captionStyle }
+            : nextComponent.captionStyle
         };
       });
 
@@ -359,7 +363,8 @@ export default function SessionLayoutEditorPage() {
       w: defaultSize.w,
       h: defaultSize.h,
       visible: true,
-      zIndex: 3
+      zIndex: 3,
+      captionStyle: type === "caption" ? { ...defaultCaptionStyle } : undefined
     };
 
     setLayout((currentLayout) => ({

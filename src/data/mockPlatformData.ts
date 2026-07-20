@@ -32,6 +32,20 @@ export interface PlatformSession {
   slides: PlatformSlide[];
 }
 
+export interface PlatformCaptionStyle {
+  fontSizePx: number;
+  fontFamily: string;
+  textBackgroundColor: string;
+  textColor: string;
+}
+
+export const defaultCaptionStyle: PlatformCaptionStyle = {
+  fontSizePx: 28,
+  fontFamily: "Pretendard, Inter, system-ui, sans-serif",
+  textBackgroundColor: "#020617",
+  textColor: "#fef9c3"
+};
+
 export interface PlatformLayoutComponent {
   id: string;
   type: PlatformComponentType;
@@ -42,6 +56,7 @@ export interface PlatformLayoutComponent {
   h: number;
   visible: boolean;
   zIndex: number;
+  captionStyle?: PlatformCaptionStyle;
 }
 
 export interface PlatformLayout {
@@ -156,7 +171,7 @@ export const mockPlatformLayout: PlatformLayout = {
   components: [
     { id: "component-video", type: "video", label: "Video", x: 2, y: 2, w: 11, h: 6, visible: true, zIndex: 1 },
     { id: "component-slide", type: "slide", label: "Slide", x: 13, y: 2, w: 10, h: 6, visible: true, zIndex: 1 },
-    { id: "component-caption", type: "caption", label: "Caption", x: 4, y: 9, w: 16, h: 3, visible: true, zIndex: 2 },
+    { id: "component-caption", type: "caption", label: "Caption", x: 4, y: 9, w: 16, h: 3, visible: true, zIndex: 2, captionStyle: { ...defaultCaptionStyle } },
     { id: "component-qa", type: "qa", label: "Q&A", x: 20, y: 9, w: 4, h: 4, visible: true, zIndex: 2 },
     { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 12, w: 17, h: 2, visible: true, zIndex: 2 }
   ]
@@ -171,7 +186,7 @@ export const mockPlatformLayouts: PlatformLayout[] = [
     components: [
       { id: "component-slide", type: "slide", label: "Slide", x: 2, y: 2, w: 15, h: 8, visible: true, zIndex: 1 },
       { id: "component-video", type: "video", label: "Video", x: 18, y: 2, w: 5, h: 4, visible: true, zIndex: 2 },
-      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 11, w: 18, h: 3, visible: true, zIndex: 3 },
+      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 11, w: 18, h: 3, visible: true, zIndex: 3, captionStyle: { ...defaultCaptionStyle } },
       { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 13, w: 21, h: 2, visible: true, zIndex: 2 }
     ]
   },
@@ -180,7 +195,7 @@ export const mockPlatformLayouts: PlatformLayout[] = [
     id: "layout-caption-only",
     name: "Caption Dedicated Stage",
     components: [
-      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 4, w: 19, h: 6, visible: true, zIndex: 3 },
+      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 4, w: 19, h: 6, visible: true, zIndex: 3, captionStyle: { ...defaultCaptionStyle } },
       { id: "component-notice", type: "notice", label: "Notice", x: 4, y: 11, w: 17, h: 2, visible: true, zIndex: 2 }
     ]
   },
@@ -192,7 +207,7 @@ export const mockPlatformLayouts: PlatformLayout[] = [
       { id: "component-video", type: "video", label: "Video", x: 2, y: 2, w: 9, h: 5, visible: true, zIndex: 1 },
       { id: "component-slide", type: "slide", label: "Slide", x: 11, y: 2, w: 8, h: 5, visible: true, zIndex: 1 },
       { id: "component-qa", type: "qa", label: "Q&A", x: 19, y: 2, w: 5, h: 8, visible: true, zIndex: 2 },
-      { id: "component-caption", type: "caption", label: "Caption", x: 2, y: 9, w: 16, h: 3, visible: true, zIndex: 3 },
+      { id: "component-caption", type: "caption", label: "Caption", x: 2, y: 9, w: 16, h: 3, visible: true, zIndex: 3, captionStyle: { ...defaultCaptionStyle } },
       { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 12, w: 21, h: 2, visible: true, zIndex: 2 }
     ]
   }

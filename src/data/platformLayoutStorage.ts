@@ -1,4 +1,8 @@
-import { PlatformDisplayTarget, PlatformLayout } from "./mockPlatformData";
+import {
+  defaultCaptionStyle,
+  PlatformDisplayTarget,
+  PlatformLayout
+} from "./mockPlatformData";
 
 const legacyDefaultLayoutId = "layout-default-live-stage";
 
@@ -25,7 +29,10 @@ function normalizeLayout(layout: PlatformLayout): PlatformLayout {
     backgroundColor: layout.backgroundColor ?? "#020617",
     components: layout.components.map((component) => ({
       ...component,
-      visible: component.visible !== false
+      visible: component.visible !== false,
+      captionStyle: component.type === "caption"
+        ? { ...defaultCaptionStyle, ...component.captionStyle }
+        : component.captionStyle
     }))
   };
 }

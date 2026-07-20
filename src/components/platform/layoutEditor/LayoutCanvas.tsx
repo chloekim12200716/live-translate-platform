@@ -1,6 +1,7 @@
 import React from "react";
 import { Trash2 } from "lucide-react";
 import {
+  defaultCaptionStyle,
   PlatformLayout,
   PlatformLayoutComponent
 } from "../../../data/mockPlatformData";
@@ -100,6 +101,10 @@ export default function LayoutCanvas({
           const isSelected = component.id === selectedComponentId;
           const componentChrome = componentChromeByType[component.type] ?? "border-white/40 bg-slate-950/55 ring-white/20";
           const componentBadge = componentBadgeByType[component.type] ?? "bg-slate-500";
+          const captionStyle = {
+            ...defaultCaptionStyle,
+            ...component.captionStyle
+          };
 
           return (
             <div
@@ -135,6 +140,21 @@ export default function LayoutCanvas({
                 <span className="mt-1 inline-flex rounded bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-300">
                   hidden
                 </span>
+              )}
+              {component.type === "caption" && (
+                <div className="mt-2 line-clamp-2 rounded px-2 py-1 text-center font-bold leading-snug shadow-inner">
+                  <span
+                    className="box-decoration-clone rounded px-1.5 py-0.5"
+                    style={{
+                      backgroundColor: captionStyle.textBackgroundColor,
+                      color: captionStyle.textColor,
+                      fontFamily: captionStyle.fontFamily,
+                      fontSize: `${Math.max(10, Math.min(18, captionStyle.fontSizePx * 0.5))}px`
+                    }}
+                  >
+                    실시간 번역 자막 예시
+                  </span>
+                </div>
               )}
               <button
                 type="button"

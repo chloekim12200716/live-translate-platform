@@ -1,5 +1,9 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Languages } from "lucide-react";
+import {
+  defaultCaptionStyle,
+  PlatformCaptionStyle
+} from "../../data/mockPlatformData";
 
 const captionByLanguage: Record<string, string> = {
   ar: "سنراجع اليوم النتائج السريرية للعلاجات مزدوجة الهدف وتأثيرها على حماية القلب والكلى.",
@@ -16,6 +20,7 @@ interface CaptionComponentProps {
   sessionSlug: string;
   sourceLanguageCode: string;
   sourceText: string;
+  style?: PlatformCaptionStyle;
 }
 
 interface StreamCaptionPayload {
@@ -67,9 +72,10 @@ function getCaptionDisplayText({
   return "";
 }
 
-export default function CaptionComponent({ languageCode, sessionSlug, sourceLanguageCode, sourceText }: CaptionComponentProps) {
+export default function CaptionComponent({ languageCode, sessionSlug, sourceLanguageCode, sourceText, style }: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
+  const captionStyle = { ...defaultCaptionStyle, ...style };
   const fallbackCaption = normalizedLanguage === normalizedSourceLanguage
     ? sourceText
     : captionByLanguage[normalizedLanguage] ?? captionByLanguage.en;
@@ -252,7 +258,14 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
           <Languages className="h-4 w-4" />
           {normalizedLanguage} captions · {engine}{sequence > 0 ? ` · #${sequence}` : ""}
         </div>
-        <div className="relative mt-2 min-h-0 flex-1 overflow-hidden text-lg font-semibold leading-snug text-yellow-50 md:text-2xl">
+        <div
+          className="relative mt-2 min-h-0 flex-1 overflow-hidden font-semibold leading-snug"
+          style={{
+            color: captionStyle.textColor,
+            fontFamily: captionStyle.fontFamily,
+            fontSize: `${captionStyle.fontSizePx}px`
+          }}
+        >
           <p
             ref={latestCaptionMeasureRef}
             aria-hidden="true"
@@ -267,9 +280,18 @@ export default function CaptionComponent({ languageCode, sessionSlug, sourceLang
               {visibleCaptionLines.map((line, index) => (
                 <p
                   key={line.key}
-                  className={`${shouldShowOnlyLatestCaption ? "line-clamp-2" : "line-clamp-1"} whitespace-normal break-words ${index === visibleCaptionLines.length - 1 ? "text-yellow-50" : "text-yellow-100/80"}`}
+                  className={`${shouldShowOnlyLatestCaption ? "line-clamp-2" : "line-clamp-1"} whitespace-normal break-words`}
+                  style={{
+                    color: index === visibleCaptionLines.length - 1 ? captionStyle.textColor : `${captionStyle.textColor}cc`,
+                    textShadow: "0 1px 2px rgba(0, 0, 0, 0.45)"
+                  }}
                 >
-                  {line.text}
+                  <span
+                    className="box-decoration-clone rounded px-2 py-0.5"
+                    style={{ backgroundColor: captionStyle.textBackgroundColor }}
+                  >
+                    {line.text}
+                  </span>
                 </p>
               ))}
             </div>

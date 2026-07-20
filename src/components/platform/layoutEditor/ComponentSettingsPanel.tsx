@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  defaultCaptionStyle,
   PlatformComponentType,
   PlatformLayout,
   PlatformLayoutComponent
@@ -17,6 +18,11 @@ interface ComponentSettingsPanelProps {
   onDeleteSelectedComponent: () => void;
 }
 
+function normalizeCaptionFontSize(value: number) {
+  if (!Number.isFinite(value)) return defaultCaptionStyle.fontSizePx;
+  return Math.min(96, Math.max(12, Math.round(value)));
+}
+
 export default function ComponentSettingsPanel({
   layout,
   selectedComponent,
@@ -24,6 +30,20 @@ export default function ComponentSettingsPanel({
   onNumberChange,
   onDeleteSelectedComponent
 }: ComponentSettingsPanelProps) {
+  const captionStyle = {
+    ...defaultCaptionStyle,
+    ...selectedComponent?.captionStyle
+  };
+
+  const updateCaptionStyle = (updates: Partial<typeof defaultCaptionStyle>) => {
+    onUpdateSelectedComponent({
+      captionStyle: {
+        ...captionStyle,
+        ...updates
+      }
+    });
+  };
+
   return (
     <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       {selectedComponent ? (
@@ -101,6 +121,86 @@ export default function ComponentSettingsPanel({
               />
             </label>
           </div>
+
+          {selectedComponent.type === "caption" && (
+            <div className="space-y-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Caption Style</p>
+                <p className="mt-1 text-xs leading-relaxed text-emerald-900/70">
+                  라이브 화면의 자막 글자 스타일을 설정합니다.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-xs font-bold text-slate-600">Font Size</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={12}
+                      max={96}
+                      step={1}
+                      value={captionStyle.fontSizePx}
+                      onChange={(event) => updateCaptionStyle({ fontSizePx: normalizeCaptionFontSize(Number(event.target.value)) })}
+                      className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <span className="text-xs font-bold text-slate-500">px</span>
+                  </div>
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-xs font-bold text-slate-600">Font Family</span>
+                  <select
+                    value={captionStyle.fontFamily}
+                    onChange={(event) => updateCaptionStyle({ fontFamily: event.target.value })}
+                    className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="Pretendard, Inter, system-ui, sans-serif">Pretendard</option>
+                    <option value="Inter, system-ui, sans-serif">Inter</option>
+                    <option value="Arial, Helvetica, sans-serif">Arial</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                    <option value="'Courier New', Courier, monospace">Courier New</option>
+                    <option value="system-ui, sans-serif">System UI</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-xs font-bold text-slate-600">글자 색상</span>
+                  <input
+                    type="color"
+                    value={captionStyle.textColor}
+                    onChange={(event) => updateCaptionStyle({ textColor: event.target.value })}
+                    className="h-10 w-full rounded-lg border border-emerald-200 bg-white p-1"
+                  />
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-xs font-bold text-slate-600">글자 배경색</span>
+                  <input
+                    type="color"
+                    value={captionStyle.textBackgroundColor}
+                    onChange={(event) => updateCaptionStyle({ textBackgroundColor: event.target.value })}
+                    className="h-10 w-full rounded-lg border border-emerald-200 bg-white p-1"
+                  />
+                </label>
+              </div>
+
+              <div
+                className="rounded-lg px-4 py-3 text-center font-bold leading-snug shadow-inner"
+                style={{
+                  backgroundColor: captionStyle.textBackgroundColor,
+                  color: captionStyle.textColor,
+                  fontFamily: captionStyle.fontFamily,
+                  fontSize: `${Math.min(captionStyle.fontSizePx, 32)}px`
+                }}
+              >
+                실시간 번역 자막 예시
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
