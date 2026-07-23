@@ -654,6 +654,8 @@ async function saveLiveTranscriptDocument(document: LiveTranscriptDocument) {
 }
 
 function createLiveCaptionSegment({
+  id,
+  sequence,
   sessionSlug,
   timestamp,
   speaker,
@@ -661,6 +663,8 @@ function createLiveCaptionSegment({
   sourceLang,
   isFinal
 }: {
+  id?: string;
+  sequence?: number;
   sessionSlug: string | undefined;
   timestamp?: number;
   speaker?: string;
@@ -668,18 +672,19 @@ function createLiveCaptionSegment({
   sourceLang?: string;
   isFinal?: boolean;
 }) {
-  liveCaptionSequence += 1;
+  const nextSequence = sequence ?? liveCaptionSequence + 1;
+  liveCaptionSequence = Math.max(liveCaptionSequence, nextSequence);
   const cleanedText = removeSpeechFillers(text);
 
   return {
-    id: `caption-${Date.now()}-${liveCaptionSequence}`,
+    id: id ?? `caption-${Date.now()}-${nextSequence}`,
     sessionSlug: getCaptionSessionKey(sessionSlug),
     timestamp: Number(timestamp) || 0,
     speaker: speaker || "Speaker",
     text: cleanedText,
     sourceLang: (sourceLang || "en").toLowerCase(),
     isFinal: isFinal !== undefined ? Boolean(isFinal) : true,
-    sequence: liveCaptionSequence,
+    sequence: nextSequence,
     createdAt: new Date().toISOString()
   };
 }
@@ -749,12 +754,20 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
     });
 }
 
-function publishLiveCaption(segment: LiveCaptionSegment) {
+function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: boolean } = {}) {
   if (!segment.text.trim()) return;
+  const shouldPersist = options.persist !== false;
 
-  liveCaptionQueue.push(segment);
-  if (liveCaptionQueue.length > 100) {
-    liveCaptionQueue.shift();
+  if (shouldPersist) {
+    const existingIndex = liveCaptionQueue.findIndex((queuedSegment) => queuedSegment.id === segment.id);
+    if (existingIndex === -1) {
+      liveCaptionQueue.push(segment);
+    } else {
+      liveCaptionQueue[existingIndex] = segment;
+    }
+    if (liveCaptionQueue.length > 100) {
+      liveCaptionQueue.shift();
+    }
   }
 
   captionStreamSubscribers.forEach((subscriber) => {
@@ -1363,14 +1376,52 @@ function createLiveCaptionPublisher({
   targetLang: string;
   document: LiveTranscriptDocument;
 }) {
-  let lastPublishedText = "";
+  let currentDraftId = "";
+  let currentDraftSequence = 0;
+  let lastDraftText = "";
+  let lastFinalText = "";
+
+  const ensureDraftIdentity = () => {
+    if (currentDraftId && currentDraftSequence) return;
+    currentDraftSequence = liveCaptionSequence + 1;
+    currentDraftId = `caption-${Date.now()}-${currentDraftSequence}`;
+  };
 
   return (text: string, engine = `Gemini ${GEMINI_LIVE_MODEL} Live`, isFinal = true) => {
     const normalizedText = removeSpeechFillers(text);
-    if (normalizedText.length < 2 || normalizedText === lastPublishedText) return;
+    if (normalizedText.length < 2) return;
 
-    lastPublishedText = normalizedText;
+    if (!isFinal) {
+      if (normalizedText === lastDraftText) return;
+      ensureDraftIdentity();
+      lastDraftText = normalizedText;
+
+      const draftSegment = createLiveCaptionSegment({
+        id: currentDraftId,
+        sequence: currentDraftSequence,
+        sessionSlug,
+        speaker: "Live Audio",
+        text: normalizedText,
+        sourceLang,
+        isFinal: false
+      });
+      publishLiveCaption(draftSegment, { persist: false });
+      sendAudioLiveSocketMessage(socket, {
+        type: "caption",
+        transcript: normalizedText,
+        sequence: draftSegment.sequence,
+        engine,
+        isFinal: false
+      });
+      return;
+    }
+
+    if (normalizedText === lastFinalText) return;
+    const finalSegmentId = currentDraftId || undefined;
+    const finalSegmentSequence = currentDraftSequence || undefined;
     const segment = createLiveCaptionSegment({
+      id: finalSegmentId,
+      sequence: finalSegmentSequence,
       sessionSlug,
       speaker: "Live Audio",
       text: normalizedText,
@@ -1384,6 +1435,10 @@ function createLiveCaptionPublisher({
       targetLang,
       engine
     });
+    lastFinalText = normalizedText;
+    currentDraftId = "";
+    currentDraftSequence = 0;
+    lastDraftText = "";
     sendAudioLiveSocketMessage(socket, {
       type: "caption",
       transcript: normalizedText,
@@ -1529,12 +1584,11 @@ function createLiveTranscriptBuffer({
 
       if (outputText) {
         const cleanedOutputText = removeSpeechFillers(outputText);
-        if (mode === "realtime" && cleanedOutputText) {
-          publishTranscript(cleanedOutputText, `Gemini ${GEMINI_LIVE_MODEL} Live Draft`, false);
-        }
-
         hasFinalFragments = true;
         pendingText = appendTranscriptFragment(pendingText, cleanedOutputText || outputText);
+        if (mode === "realtime" && shouldPublishTranscriptText(pendingText)) {
+          publishTranscript(pendingText, `Gemini ${GEMINI_LIVE_MODEL} Live Draft`, false);
+        }
         if (shouldFlushTranscriptNow(pendingText)) {
           flush("sentence-boundary");
         } else {
