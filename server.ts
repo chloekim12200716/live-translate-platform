@@ -255,6 +255,11 @@ function createFallbackTranslationResult(
   };
 }
 
+function isFallbackTranslationResult(result: TranslationResult) {
+  return result.engine.startsWith("Rule-based")
+    || result.translatedText.startsWith("[AI Demo Translation:");
+}
+
 function recordTranslationError({
   error,
   text,
@@ -1511,13 +1516,21 @@ function appendTranscriptFragment(currentText: string, fragment: string) {
     return `${normalizedCurrent}${normalizedFragment}`;
   }
 
-  const currentEndsWithLetter = /[a-zA-Z]$/.test(normalizedCurrent);
-  const fragmentStartsWithLowercase = /^[a-z]/.test(normalizedFragment);
-  if (currentEndsWithLetter && fragmentStartsWithLowercase) {
+  if (shouldJoinAsSplitWord(normalizedCurrent, normalizedFragment)) {
     return `${normalizedCurrent}${normalizedFragment}`;
   }
 
   return `${normalizedCurrent} ${normalizedFragment}`;
+}
+
+function shouldJoinAsSplitWord(currentText: string, fragment: string) {
+  const currentLastToken = currentText.split(/\s+/).at(-1) ?? "";
+  const fragmentFirstToken = fragment.split(/\s+/)[0] ?? "";
+  if (!currentLastToken || !fragmentFirstToken) return false;
+  if (!/[a-zA-Z]$/.test(currentLastToken) || !/^[a-z]/.test(fragmentFirstToken)) return false;
+  if (fragment.includes(" ")) return false;
+
+  return currentLastToken.length <= 2;
 }
 
 function normalizeMergeToken(token: string) {
@@ -1597,8 +1610,8 @@ function createLiveTranscriptBuffer({
 
   const translateAndPublishSourceText = async (sourceText: string, isFinal: boolean, reason: string) => {
     const normalizedSourceText = removeSpeechFillers(sourceText);
-    if (!shouldPublishTranscriptText(normalizedSourceText)) return;
-    if (!isFinal && normalizedSourceText === lastRealtimeDraftSource) return;
+    if (!shouldPublishTranscriptText(normalizedSourceText)) return false;
+    if (!isFinal && normalizedSourceText === lastRealtimeDraftSource) return false;
 
     const requestId = realtimeDraftRequestId + 1;
     realtimeDraftRequestId = requestId;
@@ -1606,12 +1619,20 @@ function createLiveTranscriptBuffer({
 
     const translation = await translateText(normalizedSourceText, detectedSourceLang, targetLang);
     if (!isFinal && requestId !== realtimeDraftRequestId) return;
+    if (isFallbackTranslationResult(translation)) {
+      sendAudioLiveSocketMessage(socket, {
+        type: "debug",
+        message: `source rewrite skipped fallback translation (${reason}): ${translation.engine}`
+      });
+      return false;
+    }
 
     publishTranscript(
       translation.translatedText,
       `${translation.engine} ${isFinal ? "Final" : "Draft"} (${reason})`,
       isFinal
     );
+    return true;
   };
 
   const scheduleRealtimeDraftTranslation = () => {
@@ -1647,8 +1668,8 @@ function createLiveTranscriptBuffer({
         type: "debug",
         message: `source transcript flushed (${reason}): ${normalizedSourceText.length} chars`
       });
-      await translateAndPublishSourceText(normalizedSourceText, true, reason);
-      return;
+      const didPublishSourceRewrite = await translateAndPublishSourceText(normalizedSourceText, true, reason);
+      if (didPublishSourceRewrite) return;
     }
 
     if (!shouldPublishTranscriptText(normalizedText)) {
