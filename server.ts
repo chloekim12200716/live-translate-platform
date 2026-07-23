@@ -1343,6 +1343,11 @@ function getLiveTranslateTargetLanguageCode(languageCode: string) {
   return targetLanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
 }
 
+function getPrimaryLanguageCode(languageCode: string | undefined) {
+  if (!languageCode) return "";
+  return languageCode.toLowerCase().split("-")[0] || "";
+}
+
 function summarizeLiveServerMessage(message: LiveServerMessageLike) {
   const serverContent = message.serverContent;
   const summary = [
@@ -1559,15 +1564,24 @@ function mergeRepeatedBoundaryPhrase(currentText: string, fragment: string) {
 function createLiveTranscriptBuffer({
   socket,
   publishTranscript,
-  mode
+  mode,
+  sourceLang,
+  targetLang
 }: {
   socket: WebSocket;
   publishTranscript: (text: string, engine?: string, isFinal?: boolean) => void;
   mode: LiveTranslationMode;
+  sourceLang: string;
+  targetLang: string;
 }) {
   let pendingText = "";
+  let sourcePendingText = "";
+  let detectedSourceLang = getPrimaryLanguageCode(sourceLang) || "en";
+  let lastRealtimeDraftSource = "";
   let hasFinalFragments = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let realtimeDraftTimer: ReturnType<typeof setTimeout> | null = null;
+  let realtimeDraftRequestId = 0;
 
   const clearDebounceTimer = () => {
     if (!debounceTimer) return;
@@ -1575,11 +1589,67 @@ function createLiveTranscriptBuffer({
     debounceTimer = null;
   };
 
-  const flush = (reason: string) => {
+  const clearRealtimeDraftTimer = () => {
+    if (!realtimeDraftTimer) return;
+    clearTimeout(realtimeDraftTimer);
+    realtimeDraftTimer = null;
+  };
+
+  const translateAndPublishSourceText = async (sourceText: string, isFinal: boolean, reason: string) => {
+    const normalizedSourceText = removeSpeechFillers(sourceText);
+    if (!shouldPublishTranscriptText(normalizedSourceText)) return;
+    if (!isFinal && normalizedSourceText === lastRealtimeDraftSource) return;
+
+    const requestId = realtimeDraftRequestId + 1;
+    realtimeDraftRequestId = requestId;
+    lastRealtimeDraftSource = normalizedSourceText;
+
+    const translation = await translateText(normalizedSourceText, detectedSourceLang, targetLang);
+    if (!isFinal && requestId !== realtimeDraftRequestId) return;
+
+    publishTranscript(
+      translation.translatedText,
+      `${translation.engine} ${isFinal ? "Final" : "Draft"} (${reason})`,
+      isFinal
+    );
+  };
+
+  const scheduleRealtimeDraftTranslation = () => {
+    if (mode !== "realtime") return;
+    const sourceText = sourcePendingText;
+    if (!shouldPublishTranscriptText(sourceText)) return;
+
+    clearRealtimeDraftTimer();
+    realtimeDraftTimer = setTimeout(() => {
+      void translateAndPublishSourceText(sourceText, false, "source-rewrite")
+        .catch((error) => {
+          recordTranslationError({
+            error,
+            text: sourceText,
+            sourceLang: detectedSourceLang,
+            targetLang
+          });
+        });
+    }, 650);
+  };
+
+  const flush = async (reason: string) => {
     clearDebounceTimer();
+    clearRealtimeDraftTimer();
     const normalizedText = removeSpeechFillers(pendingText);
+    const normalizedSourceText = removeSpeechFillers(sourcePendingText);
     pendingText = "";
+    sourcePendingText = "";
     hasFinalFragments = false;
+
+    if (mode === "realtime" && shouldPublishTranscriptText(normalizedSourceText)) {
+      sendAudioLiveSocketMessage(socket, {
+        type: "debug",
+        message: `source transcript flushed (${reason}): ${normalizedSourceText.length} chars`
+      });
+      await translateAndPublishSourceText(normalizedSourceText, true, reason);
+      return;
+    }
 
     if (!shouldPublishTranscriptText(normalizedText)) {
       if (normalizedText) {
@@ -1600,7 +1670,9 @@ function createLiveTranscriptBuffer({
 
   const scheduleDebouncedFlush = () => {
     clearDebounceTimer();
-    debounceTimer = setTimeout(() => flush("debounce"), 1300);
+    debounceTimer = setTimeout(() => {
+      void flush("debounce");
+    }, 1300);
   };
 
   return {
@@ -1622,6 +1694,13 @@ function createLiveTranscriptBuffer({
       }
 
       if (inputText) {
+        const inputLanguage = getPrimaryLanguageCode(serverContent?.inputTranscription?.languageCode);
+        if (inputLanguage && inputLanguage !== "und") {
+          detectedSourceLang = inputLanguage;
+        }
+        sourcePendingText = appendTranscriptFragment(sourcePendingText, removeSpeechFillers(inputText));
+        scheduleRealtimeDraftTranslation();
+
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
           message: `input transcript observed: ${normalizeTranscriptText(inputText)}`
@@ -1632,11 +1711,8 @@ function createLiveTranscriptBuffer({
         const cleanedOutputText = removeSpeechFillers(outputText);
         hasFinalFragments = true;
         pendingText = appendTranscriptFragment(pendingText, cleanedOutputText || outputText);
-        if (mode === "realtime" && shouldPublishTranscriptText(pendingText)) {
-          publishTranscript(pendingText, `Gemini ${GEMINI_LIVE_MODEL} Live Draft`, false);
-        }
-        if (shouldFlushTranscriptNow(pendingText)) {
-          flush("sentence-boundary");
+        if (shouldFlushTranscriptNow(sourcePendingText) || shouldFlushTranscriptNow(pendingText)) {
+          void flush("sentence-boundary");
         } else {
           scheduleDebouncedFlush();
         }
@@ -1654,7 +1730,10 @@ function createLiveTranscriptBuffer({
       }
     },
     flush,
-    dispose: clearDebounceTimer
+    dispose() {
+      clearDebounceTimer();
+      clearRealtimeDraftTimer();
+    }
   };
 }
 
@@ -1686,7 +1765,9 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     const liveTranscriptBuffer = createLiveTranscriptBuffer({
       socket,
       publishTranscript: publishLiveTranscript,
-      mode: translationMode
+      mode: translationMode,
+      sourceLang,
+      targetLang
     });
 
     const flushPendingFrames = () => {
@@ -1816,7 +1897,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             publishLiveTranscript(message.text, "Client Text Frame");
           }
           if (message.type === "end") {
-            liveTranscriptBuffer.flush("client-end");
+            void liveTranscriptBuffer.flush("client-end");
             liveSession?.sendRealtimeInput({ audioStreamEnd: true });
           }
         } catch {
@@ -1860,11 +1941,15 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
     socket.on("close", () => {
       isClosed = true;
-      liveTranscriptBuffer.flush("socket-close");
-      liveTranscriptBuffer.dispose();
-      if (!didSaveTranscriptDocument) {
-        didSaveTranscriptDocument = true;
-        void saveLiveTranscriptDocument(transcriptDocument)
+      void liveTranscriptBuffer.flush("socket-close")
+        .finally(() => {
+          liveTranscriptBuffer.dispose();
+        })
+        .finally(() => {
+          if (didSaveTranscriptDocument) return;
+          didSaveTranscriptDocument = true;
+          return saveLiveTranscriptDocument(transcriptDocument);
+        })
           .then(() => {
             if (transcriptDocument.filePath) {
               console.log(`Saved live transcript document: ${transcriptDocument.filePath}`);
@@ -1878,7 +1963,6 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
               targetLang
             });
           });
-      }
       try {
         liveSession?.sendRealtimeInput({ audioStreamEnd: true });
       } catch {
