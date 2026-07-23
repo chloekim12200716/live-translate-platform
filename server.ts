@@ -1487,6 +1487,11 @@ function appendTranscriptFragment(currentText: string, fragment: string) {
     return currentText;
   }
 
+  const boundaryMergedText = mergeRepeatedBoundaryPhrase(normalizedCurrent, normalizedFragment);
+  if (boundaryMergedText) {
+    return boundaryMergedText;
+  }
+
   const fragmentHasLeadingSpace = /^\s/.test(fragment);
   const currentHasTrailingSpace = /\s$/.test(currentText);
   if (fragmentHasLeadingSpace || currentHasTrailingSpace) {
@@ -1508,6 +1513,47 @@ function appendTranscriptFragment(currentText: string, fragment: string) {
   }
 
   return `${normalizedCurrent} ${normalizedFragment}`;
+}
+
+function normalizeMergeToken(token: string) {
+  return token
+    .replace(/[()[\]{}"'“”‘’.,;:!?。！？，、]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isMeaningfulOverlap(tokens: string[]) {
+  const normalizedTokens = tokens.map(normalizeMergeToken).filter(Boolean);
+  if (normalizedTokens.length >= 2) return true;
+  const onlyToken = normalizedTokens[0] ?? "";
+  return /\d/.test(onlyToken) || onlyToken.length >= 5;
+}
+
+function mergeRepeatedBoundaryPhrase(currentText: string, fragment: string) {
+  const currentTokens = currentText.split(/\s+/).filter(Boolean);
+  const fragmentTokens = fragment.split(/\s+/).filter(Boolean);
+  const maxOverlapTokenCount = Math.min(8, currentTokens.length, fragmentTokens.length);
+
+  for (let overlapTokenCount = maxOverlapTokenCount; overlapTokenCount >= 1; overlapTokenCount -= 1) {
+    const currentSuffixTokens = currentTokens.slice(-overlapTokenCount);
+    if (!isMeaningfulOverlap(currentSuffixTokens)) continue;
+
+    const normalizedCurrentSuffix = currentSuffixTokens.map(normalizeMergeToken).join(" ");
+    const maxFragmentStartIndex = Math.min(4, fragmentTokens.length - overlapTokenCount);
+
+    for (let fragmentStartIndex = 0; fragmentStartIndex <= maxFragmentStartIndex; fragmentStartIndex += 1) {
+      const fragmentCandidate = fragmentTokens
+        .slice(fragmentStartIndex, fragmentStartIndex + overlapTokenCount)
+        .map(normalizeMergeToken)
+        .join(" ");
+
+      if (fragmentCandidate && fragmentCandidate === normalizedCurrentSuffix) {
+        return [...currentTokens.slice(0, -overlapTokenCount), ...fragmentTokens].join(" ");
+      }
+    }
+  }
+
+  return "";
 }
 
 function createLiveTranscriptBuffer({
