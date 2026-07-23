@@ -3,10 +3,9 @@ import { Radio, ScreenShare, Send, Square } from "lucide-react";
 
 interface LiveAudioTranslationTesterProps {
   sessionSlug: string;
-  defaultSourceLanguageCode: string;
 }
 
-const sourceLanguageOptions = [
+const languageOptions = [
   { code: "en", label: "English" },
   { code: "ko", label: "Korean" },
   { code: "fr", label: "French" },
@@ -28,12 +27,13 @@ function float32ToPcm16Buffer(input: Float32Array) {
   return buffer;
 }
 
-function createLiveAudioWebSocketUrl(sessionSlug: string, sourceLanguageCode: string, targetLanguageCode: string) {
+function createLiveAudioWebSocketUrl(sessionSlug: string, targetLanguageCode: string, translationMode: "realtime" | "sentence") {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({
     sessionSlug,
-    sourceLang: sourceLanguageCode,
+    sourceLang: "auto",
     targetLang: targetLanguageCode,
+    mode: translationMode,
     mimeType: "audio/pcm;rate=16000"
   });
 
@@ -41,11 +41,10 @@ function createLiveAudioWebSocketUrl(sessionSlug: string, sourceLanguageCode: st
 }
 
 export default function LiveAudioTranslationTester({
-  sessionSlug,
-  defaultSourceLanguageCode
+  sessionSlug
 }: LiveAudioTranslationTesterProps) {
-  const [sourceLanguageCode, setSourceLanguageCode] = useState(defaultSourceLanguageCode);
   const [targetLanguageCode, setTargetLanguageCode] = useState("ko");
+  const [translationMode, setTranslationMode] = useState<"realtime" | "sentence">("sentence");
   const [isCapturing, setIsCapturing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [latestTranscript, setLatestTranscript] = useState("");
@@ -145,7 +144,7 @@ export default function LiveAudioTranslationTester({
       }
       pushDiagnosticEvent(`audio track selected: ${audioTracks[0]?.label || "unknown"}`);
 
-      const socket = new WebSocket(createLiveAudioWebSocketUrl(sessionSlug, sourceLanguageCode, targetLanguageCode));
+      const socket = new WebSocket(createLiveAudioWebSocketUrl(sessionSlug, targetLanguageCode, translationMode));
       socket.binaryType = "arraybuffer";
       socket.onopen = () => {
         setStatusMessage("Live API WebSocket 연결 중");
@@ -230,7 +229,7 @@ export default function LiveAudioTranslationTester({
       setLatestTranscript("");
       setDiagnosticEvents([]);
       setStatusMessage("탭/시스템 오디오 캡처 준비 중");
-      pushDiagnosticEvent("capture initialized");
+      pushDiagnosticEvent(`capture initialized (${translationMode})`);
     } catch (error) {
       cleanupAudio();
       socketRef.current?.close();
@@ -252,7 +251,7 @@ export default function LiveAudioTranslationTester({
           </div>
           <h3 className="mt-1 text-lg font-bold text-slate-900">저지연 오디오 전사/번역 테스트</h3>
           <p className="mt-1 text-sm text-slate-500">
-            사용자 화면의 영상 자체가 자동 번역을 시작하지는 않습니다. 이 버튼으로 YouTube 탭 또는 라이브 방송 탭의 오디오를 캡처해 Gemini Live API로 보냅니다.
+            입력 언어는 Gemini Live API가 자동 인식합니다. 이 버튼으로 YouTube 탭 또는 라이브 방송 탭의 오디오를 캡처해 선택한 언어로 번역합니다.
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
@@ -260,23 +259,7 @@ export default function LiveAudioTranslationTester({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[170px_170px_minmax(0,1fr)_auto]">
-        <label className="text-xs font-bold text-slate-700">
-          입력 언어
-          <select
-            value={sourceLanguageCode}
-            onChange={(event) => setSourceLanguageCode(event.target.value)}
-            disabled={isCapturing}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-400 disabled:opacity-60"
-          >
-            {sourceLanguageOptions.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
+      <div className="mt-4 grid gap-3 lg:grid-cols-[170px_230px_minmax(0,1fr)_auto]">
         <label className="text-xs font-bold text-slate-700">
           번역 언어
           <select
@@ -285,11 +268,24 @@ export default function LiveAudioTranslationTester({
             disabled={isCapturing}
             className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-400 disabled:opacity-60"
           >
-            {sourceLanguageOptions.map((option) => (
+            {languageOptions.map((option) => (
               <option key={option.code} value={option.code}>
                 {option.label}
               </option>
             ))}
+          </select>
+        </label>
+
+        <label className="text-xs font-bold text-slate-700">
+          반영 방식
+          <select
+            value={translationMode}
+            onChange={(event) => setTranslationMode(event.target.value as "realtime" | "sentence")}
+            disabled={isCapturing}
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-400 disabled:opacity-60"
+          >
+            <option value="sentence">실시간 문장 단위 별 번역 반영</option>
+            <option value="realtime">실시간 번역 반영</option>
           </select>
         </label>
 
@@ -340,7 +336,7 @@ export default function LiveAudioTranslationTester({
 
       <p className="mt-3 text-xs leading-relaxed text-slate-500">
         Chrome 공유 창에서 오디오가 재생 중인 탭을 선택하고 `Share tab audio`를 켜세요. `/live/...` 사용자 화면은 여기서 publish된 자막을 받는 표시용 화면입니다.
-        이 경로는 HTTP chunk보다 지연이 낮지만,
+        문장 단위 모드는 최종 transcript 저장에 적합하고, 실시간 반영 모드는 draft 자막을 더 빨리 보여줍니다.
         실제 응답 시간은 Gemini Live API 상태와 네트워크에 영향을 받습니다.
       </p>
     </div>

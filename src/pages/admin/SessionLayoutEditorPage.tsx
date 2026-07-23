@@ -62,6 +62,7 @@ export default function SessionLayoutEditorPage() {
   const allBaseLayouts = [...mockPlatformLayouts, ...customLayouts];
   const selectedBaseLayout = allBaseLayouts.find((layout) => layout.id === selectedLayoutId) ?? mockPlatformLayout;
   const selectedDisplay = allPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
+  const previewLanguageCode = selectedDisplay?.defaultLanguageCode ?? mockPlatformSession.sourceLanguageCode;
   const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -472,14 +473,14 @@ export default function SessionLayoutEditorPage() {
               저장
             </button>
             <Link
-              to={`/live/${mockPlatformSession.slug}/en?layoutId=${selectedBaseLayout.id}`}
+              to={`/live/${mockPlatformSession.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-slate-950 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-slate-800 sm:flex-none"
             >
               저장 후 미리보기
             </Link>
             <Link
-              to={`/live/${mockPlatformSession.slug}/ko?layoutId=${selectedBaseLayout.id}&overlay=caption`}
+              to={`/live/${mockPlatformSession.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&overlay=caption`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-emerald-700 sm:flex-none"
             >

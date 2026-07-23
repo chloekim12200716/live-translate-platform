@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs/promises";
 import path from "path";
 import { createServer as createHttpServer, type Server as HttpServer } from "http";
 import { createServer as createViteServer } from "vite";
@@ -504,6 +505,27 @@ interface DemoCaptionProducer {
   startedAt: string;
 }
 
+type LiveTranslationMode = "realtime" | "sentence";
+
+interface LiveTranscriptDocumentEntry {
+  id: string;
+  sequence: number;
+  text: string;
+  targetLang: string;
+  engine: string;
+  createdAt: string;
+}
+
+interface LiveTranscriptDocument {
+  id: string;
+  sessionSlug: string;
+  targetLang: string;
+  startedAt: string;
+  endedAt?: string;
+  entries: LiveTranscriptDocumentEntry[];
+  filePath?: string;
+}
+
 const demoLiveCaptionTemplates = [
   {
     timestamp: 0,
@@ -536,9 +558,99 @@ let liveCaptionSequence = 0;
 const liveCaptionQueue: LiveCaptionSegment[] = [];
 const captionStreamSubscribers = new Map<string, CaptionStreamSubscriber>();
 const demoCaptionProducers = new Map<string, DemoCaptionProducer>();
+const liveTranscriptDocuments: LiveTranscriptDocument[] = [];
+const transcriptOutputDirectory = path.join(process.cwd(), "runtime", "transcripts");
 
 function getCaptionSessionKey(sessionSlug: string | undefined) {
   return (sessionSlug || "main-keynote").toLowerCase();
+}
+
+function getSafeFilePart(value: string) {
+  return value.replace(/[^a-z0-9가-힣_-]+/gi, "-").replace(/^-+|-+$/g, "") || "session";
+}
+
+function removeSpeechFillers(text: string) {
+  return text
+    .replace(/\b(uh|um|umm|hmm|ah|er|erm|you know|i mean)\b[,\s]*/gi, "")
+    .replace(/(^|[\s,])(어|음|으음|아|저|그|그러니까|뭐랄까|있잖아요)(?=$|[\s,?.!])/g, "$1")
+    .replace(/\s+([,.;:!?。！？])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clearLiveCaptionQueue(sessionSlug: string) {
+  const sessionKey = getCaptionSessionKey(sessionSlug);
+  for (let index = liveCaptionQueue.length - 1; index >= 0; index -= 1) {
+    if (liveCaptionQueue[index]?.sessionSlug === sessionKey) {
+      liveCaptionQueue.splice(index, 1);
+    }
+  }
+}
+
+function createLiveTranscriptDocument(sessionSlug: string, targetLang: string): LiveTranscriptDocument {
+  const now = new Date();
+  return {
+    id: `transcript-${now.getTime()}-${Math.random().toString(36).slice(2)}`,
+    sessionSlug: getCaptionSessionKey(sessionSlug),
+    targetLang: targetLang.toLowerCase(),
+    startedAt: now.toISOString(),
+    entries: []
+  };
+}
+
+function appendLiveTranscriptEntry({
+  document,
+  segment,
+  targetLang,
+  engine
+}: {
+  document: LiveTranscriptDocument;
+  segment: LiveCaptionSegment;
+  targetLang: string;
+  engine: string;
+}) {
+  if (!segment.isFinal) return;
+  const cleanedText = removeSpeechFillers(segment.text);
+  if (!cleanedText) return;
+  if (document.entries.some((entry) => entry.id === segment.id || entry.text === cleanedText)) return;
+
+  document.entries.push({
+    id: segment.id,
+    sequence: segment.sequence,
+    text: cleanedText,
+    targetLang: targetLang.toLowerCase(),
+    engine,
+    createdAt: segment.createdAt
+  });
+}
+
+async function saveLiveTranscriptDocument(document: LiveTranscriptDocument) {
+  document.endedAt = new Date().toISOString();
+  liveTranscriptDocuments.unshift(document);
+  if (liveTranscriptDocuments.length > 50) {
+    liveTranscriptDocuments.splice(50);
+  }
+
+  if (document.entries.length === 0) return;
+
+  await fs.mkdir(transcriptOutputDirectory, { recursive: true });
+  const fileName = `${getSafeFilePart(document.sessionSlug)}-${getSafeFilePart(document.targetLang)}-${document.startedAt.replace(/[:.]/g, "-")}.md`;
+  const filePath = path.join(transcriptOutputDirectory, fileName);
+  const body = [
+    `# Live Translation Transcript`,
+    "",
+    `- Session: ${document.sessionSlug}`,
+    `- Target language: ${document.targetLang}`,
+    `- Started at: ${document.startedAt}`,
+    `- Ended at: ${document.endedAt}`,
+    "",
+    "## Final Translated Sentences",
+    "",
+    ...document.entries.map((entry) => `${entry.sequence}. ${entry.text}`)
+  ].join("\n");
+
+  await fs.writeFile(filePath, body, "utf8");
+  document.filePath = filePath;
 }
 
 function createLiveCaptionSegment({
@@ -557,13 +669,14 @@ function createLiveCaptionSegment({
   isFinal?: boolean;
 }) {
   liveCaptionSequence += 1;
+  const cleanedText = removeSpeechFillers(text);
 
   return {
     id: `caption-${Date.now()}-${liveCaptionSequence}`,
     sessionSlug: getCaptionSessionKey(sessionSlug),
     timestamp: Number(timestamp) || 0,
     speaker: speaker || "Speaker",
-    text,
+    text: cleanedText,
     sourceLang: (sourceLang || "en").toLowerCase(),
     isFinal: isFinal !== undefined ? Boolean(isFinal) : true,
     sequence: liveCaptionSequence,
@@ -573,6 +686,24 @@ function createLiveCaptionSegment({
 
 function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: LiveCaptionSegment) {
   const sourceLang = segment.sourceLang || subscriber.fallbackSourceLang;
+  const isSameLanguage = sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase();
+
+  if (isSameLanguage) {
+    subscriber.writeEvent("caption", {
+      id: segment.id,
+      sessionSlug: segment.sessionSlug,
+      timestamp: segment.timestamp,
+      speaker: segment.speaker,
+      sourceText: segment.text,
+      translatedText: segment.text,
+      engine: segment.isFinal ? "Live Translation Final" : "Live Translation Draft",
+      sourceLang,
+      targetLang: subscriber.targetLang,
+      isFinal: segment.isFinal,
+      sequence: segment.sequence
+    });
+    return;
+  }
 
   subscriber.writeEvent("caption", {
     id: segment.id,
@@ -619,6 +750,8 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
 }
 
 function publishLiveCaption(segment: LiveCaptionSegment) {
+  if (!segment.text.trim()) return;
+
   liveCaptionQueue.push(segment);
   if (liveCaptionQueue.length > 100) {
     liveCaptionQueue.shift();
@@ -982,6 +1115,21 @@ app.get("/api/captions/queue", (req, res) => {
   });
 });
 
+app.get("/api/captions/transcripts", (req, res) => {
+  const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
+  const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
+  const limit = Math.min(50, Math.max(1, Number(getQueryValue(req.query.limit, "10")) || 10));
+  const documents = liveTranscriptDocuments
+    .filter((document) => document.sessionSlug === sessionSlug)
+    .slice(0, limit);
+
+  res.json({
+    sessionSlug,
+    count: documents.length,
+    documents
+  });
+});
+
 app.post("/api/captions/publish", (req, res) => {
   const {
     sessionSlug,
@@ -1205,16 +1353,20 @@ function summarizeLiveServerMessage(message: LiveServerMessageLike) {
 function createLiveCaptionPublisher({
   socket,
   sessionSlug,
-  sourceLang
+  sourceLang,
+  targetLang,
+  document
 }: {
   socket: WebSocket;
   sessionSlug: string;
   sourceLang: string;
+  targetLang: string;
+  document: LiveTranscriptDocument;
 }) {
   let lastPublishedText = "";
 
-  return (text: string, engine = `Gemini ${GEMINI_LIVE_MODEL} Live`) => {
-    const normalizedText = text.replace(/\s+/g, " ").trim();
+  return (text: string, engine = `Gemini ${GEMINI_LIVE_MODEL} Live`, isFinal = true) => {
+    const normalizedText = removeSpeechFillers(text);
     if (normalizedText.length < 2 || normalizedText === lastPublishedText) return;
 
     lastPublishedText = normalizedText;
@@ -1223,14 +1375,21 @@ function createLiveCaptionPublisher({
       speaker: "Live Audio",
       text: normalizedText,
       sourceLang,
-      isFinal: true
+      isFinal
     });
     publishLiveCaption(segment);
+    appendLiveTranscriptEntry({
+      document,
+      segment,
+      targetLang,
+      engine
+    });
     sendAudioLiveSocketMessage(socket, {
       type: "caption",
       transcript: normalizedText,
       sequence: segment.sequence,
-      engine
+      engine,
+      isFinal
     });
   };
 }
@@ -1241,8 +1400,7 @@ function normalizeTranscriptText(text: string) {
 
 function shouldPublishTranscriptText(text: string) {
   const normalizedText = normalizeTranscriptText(text);
-  if (normalizedText.length < 22) return false;
-  if (!/\s/.test(normalizedText)) return false;
+  if (normalizedText.length < 8) return false;
   if (!/[a-zA-Z가-힣\u0600-\u06ff\u0400-\u04ff\u4e00-\u9fff]/.test(normalizedText)) return false;
   return true;
 }
@@ -1299,10 +1457,12 @@ function appendTranscriptFragment(currentText: string, fragment: string) {
 
 function createLiveTranscriptBuffer({
   socket,
-  publishTranscript
+  publishTranscript,
+  mode
 }: {
   socket: WebSocket;
-  publishTranscript: (text: string, engine?: string) => void;
+  publishTranscript: (text: string, engine?: string, isFinal?: boolean) => void;
+  mode: LiveTranslationMode;
 }) {
   let pendingText = "";
   let hasFinalFragments = false;
@@ -1316,7 +1476,7 @@ function createLiveTranscriptBuffer({
 
   const flush = (reason: string) => {
     clearDebounceTimer();
-    const normalizedText = normalizeTranscriptText(pendingText);
+    const normalizedText = removeSpeechFillers(pendingText);
     pendingText = "";
     hasFinalFragments = false;
 
@@ -1354,13 +1514,9 @@ function createLiveTranscriptBuffer({
         .trim() ?? "";
 
       if (interimText) {
-        if (!hasFinalFragments) {
-          pendingText = interimText;
-          scheduleDebouncedFlush();
-        }
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
-          message: `interim transcript ${hasFinalFragments ? "observed" : "buffered"}: ${normalizeTranscriptText(interimText).length} chars`
+          message: `interim transcript observed: ${normalizeTranscriptText(interimText).length} chars`
         });
       }
 
@@ -1372,8 +1528,13 @@ function createLiveTranscriptBuffer({
       }
 
       if (outputText) {
+        const cleanedOutputText = removeSpeechFillers(outputText);
+        if (mode === "realtime" && cleanedOutputText) {
+          publishTranscript(cleanedOutputText, `Gemini ${GEMINI_LIVE_MODEL} Live Draft`, false);
+        }
+
         hasFinalFragments = true;
-        pendingText = appendTranscriptFragment(pendingText, outputText);
+        pendingText = appendTranscriptFragment(pendingText, cleanedOutputText || outputText);
         if (shouldFlushTranscriptNow(pendingText)) {
           flush("sentence-boundary");
         } else {
@@ -1403,18 +1564,29 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
   audioLiveWss.on("connection", (socket, request) => {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
     const sessionSlug = getCaptionSessionKey(requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
-    const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "en").toLowerCase();
+    const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "auto").toLowerCase();
     const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
+    const translationMode: LiveTranslationMode = requestUrl.searchParams.get("mode") === "realtime" ? "realtime" : "sentence";
     const mimeType = requestUrl.searchParams.get("mimeType") || "audio/webm;codecs=opus";
     const pendingFrames: Buffer[] = [];
     let liveSession: GeminiLiveSessionLike | null = null;
     let isClosed = false;
     let audioFrameCount = 0;
     let liveServerMessageCount = 0;
-    const publishLiveTranscript = createLiveCaptionPublisher({ socket, sessionSlug, sourceLang: targetLang });
+    let didSaveTranscriptDocument = false;
+    clearLiveCaptionQueue(sessionSlug);
+    const transcriptDocument = createLiveTranscriptDocument(sessionSlug, targetLang);
+    const publishLiveTranscript = createLiveCaptionPublisher({
+      socket,
+      sessionSlug,
+      sourceLang: targetLang,
+      targetLang,
+      document: transcriptDocument
+    });
     const liveTranscriptBuffer = createLiveTranscriptBuffer({
       socket,
-      publishTranscript: publishLiveTranscript
+      publishTranscript: publishLiveTranscript,
+      mode: translationMode
     });
 
     const flushPendingFrames = () => {
@@ -1446,7 +1618,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         sendAudioLiveSocketMessage(socket, {
           type: "connecting",
           model: GEMINI_LIVE_MODEL,
-          message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, target=${getLiveTranslateTargetLanguageCode(targetLang)}`
+          message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, input=auto, target=${getLiveTranslateTargetLanguageCode(targetLang)}, mode=${translationMode}`
         });
 
         liveSession = await (liveAiClient as any).live.connect({
@@ -1514,7 +1686,9 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           sessionSlug,
           sourceLang,
           targetLang,
-          mimeType
+          mimeType,
+          mode: translationMode,
+          transcriptDocumentId: transcriptDocument.id
         });
         flushPendingFrames();
       } catch (error) {
@@ -1588,6 +1762,23 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       isClosed = true;
       liveTranscriptBuffer.flush("socket-close");
       liveTranscriptBuffer.dispose();
+      if (!didSaveTranscriptDocument) {
+        didSaveTranscriptDocument = true;
+        void saveLiveTranscriptDocument(transcriptDocument)
+          .then(() => {
+            if (transcriptDocument.filePath) {
+              console.log(`Saved live transcript document: ${transcriptDocument.filePath}`);
+            }
+          })
+          .catch((error) => {
+            recordTranslationError({
+              error,
+              text: "[Live transcript document save]",
+              sourceLang,
+              targetLang
+            });
+          });
+      }
       try {
         liveSession?.sendRealtimeInput({ audioStreamEnd: true });
       } catch {

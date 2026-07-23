@@ -99,7 +99,7 @@ export default function DisplayRenderer({
       const captionEvent = event as CustomEvent<Partial<TranscriptEntry>>;
       const detail = captionEvent.detail;
       if (!detail?.id || detail.languageCode !== languageCode) return;
-      if (detail.isFinal === false && !detail.translatedText?.trim()) return;
+      if (detail.isFinal !== true || !detail.translatedText?.trim()) return;
 
       setTranscriptEntries((currentEntries) => {
         const nextEntry: TranscriptEntry = {

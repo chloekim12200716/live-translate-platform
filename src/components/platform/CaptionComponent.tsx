@@ -23,6 +23,7 @@ interface CaptionComponentProps {
   style?: PlatformCaptionStyle;
   isOverlay?: boolean;
   transparentBackground?: boolean;
+  enableMockFallback?: boolean;
 }
 
 interface StreamCaptionPayload {
@@ -81,7 +82,8 @@ export default function CaptionComponent({
   sourceText,
   style,
   isOverlay = false,
-  transparentBackground = false
+  transparentBackground = false,
+  enableMockFallback = false
 }: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
@@ -89,8 +91,9 @@ export default function CaptionComponent({
   const fallbackCaption = normalizedLanguage === normalizedSourceLanguage
     ? sourceText
     : captionByLanguage[normalizedLanguage] ?? captionByLanguage.en;
-  const [captionLines, setCaptionLines] = useState<CaptionLine[]>(fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
-  const [engine, setEngine] = useState(normalizedLanguage === normalizedSourceLanguage ? "Source Caption" : "Local Mock Caption");
+  const shouldUseMockFallback = enableMockFallback && !isOverlay;
+  const [captionLines, setCaptionLines] = useState<CaptionLine[]>(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+  const [engine, setEngine] = useState(shouldUseMockFallback ? "Local Mock Caption" : "Caption Queue");
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
   const latestCaptionMeasureRef = useRef<HTMLParagraphElement>(null);
@@ -132,7 +135,7 @@ export default function CaptionComponent({
     let eventSource: EventSource | null = null;
     let didFallbackToTranslateApi = false;
 
-    setCaptionLines(fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+    setCaptionLines(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
     setIsLoading(true);
     setSequence(0);
 
@@ -155,14 +158,14 @@ export default function CaptionComponent({
           return response.json();
         })
         .then((data: { translatedText?: string; engine?: string }) => {
-          const nextCaption = data.translatedText?.trim() || fallbackCaption;
+          const nextCaption = data.translatedText?.trim() || (shouldUseMockFallback ? fallbackCaption : "");
           setCaptionLines(nextCaption ? [createCaptionLine(nextCaption, "single-translation")] : []);
           setEngine(data.engine || "Translation API Fallback");
         })
         .catch((error: Error) => {
           if (controller.signal.aborted) return;
-          setCaptionLines(fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
-          setEngine("Local Mock Caption");
+          setCaptionLines(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+          setEngine(shouldUseMockFallback ? "Local Mock Caption" : "Caption Queue");
         })
         .finally(() => {
           if (!controller.signal.aborted) {
@@ -255,7 +258,7 @@ export default function CaptionComponent({
         eventSource.close();
       }
     };
-  }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sessionSlug, sourceText]);
+  }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sessionSlug, shouldUseMockFallback, sourceText]);
 
   const visibleCaptionLines = shouldShowOnlyLatestCaption && captionLines.length > 0
     ? captionLines.slice(-1)
