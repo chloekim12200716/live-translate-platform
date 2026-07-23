@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Radio, ScreenShare, Send, Square } from "lucide-react";
+import { ExternalLink, Radio, ScreenShare, Send, Square } from "lucide-react";
 
 interface LiveAudioTranslationTesterProps {
   sessionSlug: string;
@@ -40,6 +40,15 @@ function createLiveAudioWebSocketUrl(sessionSlug: string, targetLanguageCode: st
   return `${protocol}//${window.location.host}/api/audio/live?${params.toString()}`;
 }
 
+function createCaptionOverlayPath(sessionSlug: string, targetLanguageCode: string) {
+  const params = new URLSearchParams({
+    layoutId: "layout-default-live-stage",
+    overlay: "caption"
+  });
+
+  return `/live/${sessionSlug}/${targetLanguageCode}?${params.toString()}`;
+}
+
 export default function LiveAudioTranslationTester({
   sessionSlug
 }: LiveAudioTranslationTesterProps) {
@@ -51,6 +60,7 @@ export default function LiveAudioTranslationTester({
   const [publishedCount, setPublishedCount] = useState(0);
   const [sentFrames, setSentFrames] = useState(0);
   const [diagnosticEvents, setDiagnosticEvents] = useState<string[]>([]);
+  const captionOverlayPath = createCaptionOverlayPath(sessionSlug, targetLanguageCode);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -300,6 +310,15 @@ export default function LiveAudioTranslationTester({
         </div>
 
         <div className="flex flex-col justify-end gap-2">
+          <a
+            href={captionOverlayPath}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-800 shadow-sm hover:bg-emerald-100"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            자막 오버레이
+          </a>
           <button
             type="button"
             onClick={isCapturing ? stopCapture : startTabAudioCapture}
