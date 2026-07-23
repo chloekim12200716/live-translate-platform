@@ -93,11 +93,12 @@ export default function CaptionComponent({
     : captionByLanguage[normalizedLanguage] ?? captionByLanguage.en;
   const shouldUseMockFallback = enableMockFallback && !isOverlay;
   const [captionLines, setCaptionLines] = useState<CaptionLine[]>(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+  const [draftCaptionLine, setDraftCaptionLine] = useState<CaptionLine | null>(null);
   const [engine, setEngine] = useState(shouldUseMockFallback ? "Local Mock Caption" : "Caption Queue");
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
   const latestCaptionMeasureRef = useRef<HTMLParagraphElement>(null);
-  const latestCaptionText = captionLines[captionLines.length - 1]?.text ?? "";
+  const latestCaptionText = draftCaptionLine?.text ?? captionLines[captionLines.length - 1]?.text ?? "";
   const [shouldShowOnlyLatestCaption, setShouldShowOnlyLatestCaption] = useState(false);
 
   useLayoutEffect(() => {
@@ -136,6 +137,7 @@ export default function CaptionComponent({
     let didFallbackToTranslateApi = false;
 
     setCaptionLines(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+    setDraftCaptionLine(null);
     setIsLoading(true);
     setSequence(0);
 
@@ -194,6 +196,7 @@ export default function CaptionComponent({
       setEngine("Caption Queue Connected");
       setIsLoading(false);
       setCaptionLines(data.queuedCaptions ? [] : []);
+      setDraftCaptionLine(null);
     });
     eventSource.addEventListener("caption", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as StreamCaptionPayload;
@@ -209,23 +212,32 @@ export default function CaptionComponent({
       if (nextCaption) {
         const nextKey = data.id || `sequence-${data.sequence ?? Date.now()}`;
         const nextLine = createCaptionLine(nextCaption, nextKey);
-        setCaptionLines((currentLines) => {
-          const lastLine = currentLines[currentLines.length - 1];
-          if (lastLine?.key === nextKey || lastLine?.comparisonKey === nextLine.comparisonKey) {
-            return [...currentLines.slice(0, -1), nextLine].slice(-2);
-          }
-
-          const existingIndex = currentLines.findIndex((line) => (
-            line.key === nextKey || line.comparisonKey === nextLine.comparisonKey
+        if (data.isFinal === false) {
+          setDraftCaptionLine(nextLine);
+        } else {
+          setDraftCaptionLine((currentDraftLine) => (
+            currentDraftLine?.key === nextKey || currentDraftLine?.comparisonKey === nextLine.comparisonKey
+              ? null
+              : currentDraftLine
           ));
-          if (existingIndex !== -1) {
-            const updatedLines = [...currentLines];
-            updatedLines[existingIndex] = nextLine;
-            return updatedLines.slice(-2);
-          }
+          setCaptionLines((currentLines) => {
+            const lastLine = currentLines[currentLines.length - 1];
+            if (lastLine?.key === nextKey || lastLine?.comparisonKey === nextLine.comparisonKey) {
+              return [...currentLines.slice(0, -1), nextLine].slice(-2);
+            }
 
-          return [...currentLines, nextLine].slice(-2);
-        });
+            const existingIndex = currentLines.findIndex((line) => (
+              line.key === nextKey || line.comparisonKey === nextLine.comparisonKey
+            ));
+            if (existingIndex !== -1) {
+              const updatedLines = [...currentLines];
+              updatedLines[existingIndex] = nextLine;
+              return updatedLines.slice(-2);
+            }
+
+            return [...currentLines, nextLine].slice(-2);
+          });
+        }
       }
       setEngine(data.isFinal ? data.engine || "Live Caption Stream" : "Caption Queue");
       setSequence(data.sequence || 0);
@@ -260,7 +272,9 @@ export default function CaptionComponent({
     };
   }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sessionSlug, shouldUseMockFallback, sourceText]);
 
-  const visibleCaptionLines = shouldShowOnlyLatestCaption && captionLines.length > 0
+  const visibleCaptionLines = draftCaptionLine
+    ? [draftCaptionLine]
+    : shouldShowOnlyLatestCaption && captionLines.length > 0
     ? captionLines.slice(-1)
     : captionLines.slice(-2);
   const shouldUseTransparentTextBackground = transparentBackground || captionStyle.textBackgroundTransparent;
