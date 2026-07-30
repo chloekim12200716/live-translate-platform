@@ -1284,7 +1284,13 @@ interface LiveServerMessageLike {
   setupComplete?: unknown;
   serverContent?: {
     modelTurn?: {
-      parts?: Array<{ text?: string }>;
+      parts?: Array<{
+        text?: string;
+        inlineData?: {
+          data?: string;
+          mimeType?: string;
+        };
+      }>;
     };
     inputTranscription?: {
       text?: string;
@@ -1316,6 +1322,27 @@ interface LiveServerMessageLike {
 function sendAudioLiveSocketMessage(socket: WebSocket, payload: unknown) {
   if (socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify(payload));
+}
+
+function getAudioSampleRateFromMimeType(mimeType: string | undefined) {
+  const matchedRate = mimeType?.match(/rate=(\d+)/i)?.[1];
+  return matchedRate ? Number(matchedRate) : 24000;
+}
+
+function forwardLiveTranslatedAudio(socket: WebSocket, message: LiveServerMessageLike) {
+  const audioParts = message.serverContent?.modelTurn?.parts?.filter((part) => part.inlineData?.data) ?? [];
+
+  audioParts.forEach((part) => {
+    const mimeType = part.inlineData?.mimeType || "audio/pcm;rate=24000";
+    sendAudioLiveSocketMessage(socket, {
+      type: "translation-audio",
+      audio: part.inlineData?.data,
+      mimeType,
+      sampleRate: getAudioSampleRateFromMimeType(mimeType)
+    });
+  });
+
+  return audioParts.length;
 }
 
 function getLiveAudioLanguageCode(languageCode: string) {
@@ -1843,12 +1870,15 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             },
             onmessage: (message: LiveServerMessageLike) => {
               liveServerMessageCount += 1;
+              const forwardedAudioChunks = forwardLiveTranslatedAudio(socket, message);
               liveTranscriptBuffer.handleLiveMessage(message);
 
               if (liveServerMessageCount <= 8 || liveServerMessageCount % 20 === 0) {
                 sendAudioLiveSocketMessage(socket, {
                   type: "debug",
-                  message: `Live message #${liveServerMessageCount}: ${summarizeLiveServerMessage(message)}`
+                  message: `Live message #${liveServerMessageCount}: ${summarizeLiveServerMessage(message)}${
+                    forwardedAudioChunks > 0 ? `, audioChunks:${forwardedAudioChunks}` : ""
+                  }`
                 });
               }
             },
