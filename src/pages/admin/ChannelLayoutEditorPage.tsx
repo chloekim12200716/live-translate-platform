@@ -121,13 +121,11 @@ export default function ChannelLayoutEditorPage() {
       id: layoutId,
       name,
       channelId: mockPlatformChannel.id,
-      sessionId: mockPlatformChannel.id,
       components: layout.components.map((component) => ({ ...component }))
     };
     const nextDisplay: PlatformDisplayTarget = {
       id: displayId,
       channelId: mockPlatformChannel.id,
-      sessionId: mockPlatformChannel.id,
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,

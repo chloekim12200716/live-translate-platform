@@ -66,7 +66,6 @@ function buildDisplayUrls(display: PlatformDisplayTarget, channelSlug: string): 
     displayId: display.id,
     layoutId: display.layoutId,
     channelSlug,
-    sessionSlug: channelSlug,
     languageCode,
     label: `${display.name} · ${languageCode.toUpperCase()}`,
     path: `/live/${channelSlug}/${languageCode}?layoutId=${display.layoutId}`
@@ -108,13 +107,11 @@ export default function AdminChannelsPage() {
       id: layoutId,
       name,
       channelId: mockPlatformData.channel.id,
-      sessionId: mockPlatformData.channel.id,
       components: templateLayout.components.map((component) => ({ ...component }))
     };
     const nextDisplay: PlatformDisplayTarget = {
       id: displayId,
       channelId: mockPlatformData.channel.id,
-      sessionId: mockPlatformData.channel.id,
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,

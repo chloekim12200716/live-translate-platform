@@ -482,7 +482,7 @@ interface Note {
 
 interface LiveCaptionSegment {
   id: string;
-  sessionSlug: string;
+  channelSlug: string;
   timestamp: number;
   speaker: string;
   text: string;
@@ -494,7 +494,7 @@ interface LiveCaptionSegment {
 
 interface CaptionStreamSubscriber {
   id: string;
-  sessionSlug: string;
+  channelSlug: string;
   targetLang: string;
   fallbackSourceLang: string;
   writeEvent: (eventName: string, payload: unknown) => void;
@@ -502,7 +502,7 @@ interface CaptionStreamSubscriber {
 }
 
 interface DemoCaptionProducer {
-  sessionSlug: string;
+  channelSlug: string;
   sourceLang: string;
   intervalMs: number;
   nextIndex: number;
@@ -523,7 +523,7 @@ interface LiveTranscriptDocumentEntry {
 
 interface LiveTranscriptDocument {
   id: string;
-  sessionSlug: string;
+  channelSlug: string;
   targetLang: string;
   startedAt: string;
   endedAt?: string;
@@ -566,8 +566,8 @@ const demoCaptionProducers = new Map<string, DemoCaptionProducer>();
 const liveTranscriptDocuments: LiveTranscriptDocument[] = [];
 const transcriptOutputDirectory = path.join(process.cwd(), "runtime", "transcripts");
 
-function getCaptionSessionKey(sessionSlug: string | undefined) {
-  return (sessionSlug || "main-keynote").toLowerCase();
+function getCaptionChannelKey(channelSlug: string | undefined) {
+  return (channelSlug || "main-keynote").toLowerCase();
 }
 
 function getStringValue(value: unknown, fallback: string) {
@@ -595,20 +595,20 @@ function removeSpeechFillers(text: string) {
     .trim();
 }
 
-function clearLiveCaptionQueue(sessionSlug: string) {
-  const sessionKey = getCaptionSessionKey(sessionSlug);
+function clearLiveCaptionQueue(channelSlug: string) {
+  const channelKey = getCaptionChannelKey(channelSlug);
   for (let index = liveCaptionQueue.length - 1; index >= 0; index -= 1) {
-    if (liveCaptionQueue[index]?.sessionSlug === sessionKey) {
+    if (liveCaptionQueue[index]?.channelSlug === channelKey) {
       liveCaptionQueue.splice(index, 1);
     }
   }
 }
 
-function createLiveTranscriptDocument(sessionSlug: string, targetLang: string): LiveTranscriptDocument {
+function createLiveTranscriptDocument(channelSlug: string, targetLang: string): LiveTranscriptDocument {
   const now = new Date();
   return {
     id: `transcript-${now.getTime()}-${Math.random().toString(36).slice(2)}`,
-    sessionSlug: getCaptionSessionKey(sessionSlug),
+    channelSlug: getCaptionChannelKey(channelSlug),
     targetLang: targetLang.toLowerCase(),
     startedAt: now.toISOString(),
     entries: []
@@ -651,12 +651,12 @@ async function saveLiveTranscriptDocument(document: LiveTranscriptDocument) {
   if (document.entries.length === 0) return;
 
   await fs.mkdir(transcriptOutputDirectory, { recursive: true });
-  const fileName = `${getSafeFilePart(document.sessionSlug)}-${getSafeFilePart(document.targetLang)}-${document.startedAt.replace(/[:.]/g, "-")}.md`;
+  const fileName = `${getSafeFilePart(document.channelSlug)}-${getSafeFilePart(document.targetLang)}-${document.startedAt.replace(/[:.]/g, "-")}.md`;
   const filePath = path.join(transcriptOutputDirectory, fileName);
   const body = [
     `# Live Translation Transcript`,
     "",
-    `- Channel: ${document.sessionSlug}`,
+    `- Channel: ${document.channelSlug}`,
     `- Target language: ${document.targetLang}`,
     `- Started at: ${document.startedAt}`,
     `- Ended at: ${document.endedAt}`,
@@ -673,6 +673,7 @@ async function saveLiveTranscriptDocument(document: LiveTranscriptDocument) {
 function createLiveCaptionSegment({
   id,
   sequence,
+  channelSlug,
   sessionSlug,
   timestamp,
   speaker,
@@ -682,7 +683,8 @@ function createLiveCaptionSegment({
 }: {
   id?: string;
   sequence?: number;
-  sessionSlug: string | undefined;
+  channelSlug?: string;
+  sessionSlug?: string;
   timestamp?: number;
   speaker?: string;
   text: string;
@@ -695,7 +697,7 @@ function createLiveCaptionSegment({
 
   return {
     id: id ?? `caption-${Date.now()}-${nextSequence}`,
-    sessionSlug: getCaptionSessionKey(sessionSlug),
+    channelSlug: getCaptionChannelKey(channelSlug ?? sessionSlug),
     timestamp: Number(timestamp) || 0,
     speaker: speaker || "Speaker",
     text: cleanedText,
@@ -713,7 +715,8 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
   if (isSameLanguage) {
     subscriber.writeEvent("caption", {
       id: segment.id,
-      sessionSlug: segment.sessionSlug,
+      channelSlug: segment.channelSlug,
+      sessionSlug: segment.channelSlug,
       timestamp: segment.timestamp,
       speaker: segment.speaker,
       sourceText: segment.text,
@@ -729,7 +732,8 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
 
   subscriber.writeEvent("caption", {
     id: segment.id,
-    sessionSlug: segment.sessionSlug,
+    channelSlug: segment.channelSlug,
+    sessionSlug: segment.channelSlug,
     timestamp: segment.timestamp,
     speaker: segment.speaker,
     sourceText: segment.text,
@@ -747,7 +751,8 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
 
       subscriber.writeEvent("caption", {
         id: segment.id,
-        sessionSlug: segment.sessionSlug,
+        channelSlug: segment.channelSlug,
+        sessionSlug: segment.channelSlug,
         timestamp: segment.timestamp,
         speaker: segment.speaker,
         sourceText: segment.text,
@@ -764,11 +769,19 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
 
       subscriber.writeEvent("caption-error", {
         id: segment.id,
-        sessionSlug: segment.sessionSlug,
+        channelSlug: segment.channelSlug,
+        sessionSlug: segment.channelSlug,
         message: error.message,
         sequence: segment.sequence
       });
     });
+}
+
+function serializeLiveCaptionSegment(segment: LiveCaptionSegment) {
+  return {
+    ...segment,
+    sessionSlug: segment.channelSlug
+  };
 }
 
 function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: boolean } = {}) {
@@ -788,7 +801,7 @@ function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: bo
   }
 
   captionStreamSubscribers.forEach((subscriber) => {
-    if (subscriber.sessionSlug !== segment.sessionSlug) return;
+    if (subscriber.channelSlug !== segment.channelSlug) return;
     writeLiveCaptionEvent(subscriber, segment);
   });
 }
@@ -798,7 +811,7 @@ function publishNextDemoCaption(producer: DemoCaptionProducer) {
   producer.nextIndex += 1;
 
   publishLiveCaption(createLiveCaptionSegment({
-    sessionSlug: producer.sessionSlug,
+    channelSlug: producer.channelSlug,
     timestamp: template.timestamp,
     speaker: template.speaker,
     text: template.text,
@@ -807,54 +820,54 @@ function publishNextDemoCaption(producer: DemoCaptionProducer) {
   }));
 }
 
-function stopDemoCaptionProducer(sessionSlug: string | undefined) {
-  const sessionKey = getCaptionSessionKey(sessionSlug);
-  const producer = demoCaptionProducers.get(sessionKey);
+function stopDemoCaptionProducer(channelSlug: string | undefined) {
+  const channelKey = getCaptionChannelKey(channelSlug);
+  const producer = demoCaptionProducers.get(channelKey);
   if (!producer) return false;
 
   clearInterval(producer.timer);
-  demoCaptionProducers.delete(sessionKey);
+  demoCaptionProducers.delete(channelKey);
   return true;
 }
 
-function getDemoCaptionProducerStatus(sessionSlug: string | undefined) {
-  const sessionKey = getCaptionSessionKey(sessionSlug);
-  const producer = demoCaptionProducers.get(sessionKey);
+function getDemoCaptionProducerStatus(channelSlug: string | undefined) {
+  const channelKey = getCaptionChannelKey(channelSlug);
+  const producer = demoCaptionProducers.get(channelKey);
 
   return {
-    channelSlug: sessionKey,
-    sessionSlug: sessionKey,
+    channelSlug: channelKey,
+    sessionSlug: channelKey,
     isRunning: Boolean(producer),
     sourceLang: producer?.sourceLang ?? "en",
     intervalMs: producer?.intervalMs ?? null,
     startedAt: producer?.startedAt ?? null,
     nextIndex: producer?.nextIndex ?? 0,
     subscribers: Array.from(captionStreamSubscribers.values())
-      .filter((subscriber) => subscriber.sessionSlug === sessionKey)
+      .filter((subscriber) => subscriber.channelSlug === channelKey)
       .length,
-    queuedCaptions: liveCaptionQueue.filter((segment) => segment.sessionSlug === sessionKey).length
+    queuedCaptions: liveCaptionQueue.filter((segment) => segment.channelSlug === channelKey).length
   };
 }
 
 function startDemoCaptionProducer({
-  sessionSlug,
+  channelSlug,
   sourceLang,
   intervalMs
 }: {
-  sessionSlug: string | undefined;
+  channelSlug: string | undefined;
   sourceLang: string | undefined;
   intervalMs: number;
 }) {
-  const sessionKey = getCaptionSessionKey(sessionSlug);
-  stopDemoCaptionProducer(sessionKey);
+  const channelKey = getCaptionChannelKey(channelSlug);
+  stopDemoCaptionProducer(channelKey);
 
   const producer: DemoCaptionProducer = {
-    sessionSlug: sessionKey,
+    channelSlug: channelKey,
     sourceLang: (sourceLang || "en").toLowerCase(),
     intervalMs: Math.max(1500, intervalMs || 3500),
     nextIndex: 0,
     timer: setInterval(() => {
-      const currentProducer = demoCaptionProducers.get(sessionKey);
+      const currentProducer = demoCaptionProducers.get(channelKey);
       if (currentProducer) {
         publishNextDemoCaption(currentProducer);
       }
@@ -862,10 +875,10 @@ function startDemoCaptionProducer({
     startedAt: new Date().toISOString()
   };
 
-  demoCaptionProducers.set(sessionKey, producer);
+  demoCaptionProducers.set(channelKey, producer);
   publishNextDemoCaption(producer);
 
-  return getDemoCaptionProducerStatus(sessionKey);
+  return getDemoCaptionProducerStatus(channelKey);
 }
 
 // In-Memory Live State
@@ -1039,7 +1052,7 @@ app.post("/api/translate", async (req, res) => {
 });
 
 app.post("/api/audio/transcribe-publish", express.raw({ type: "*/*", limit: "15mb" }), async (req, res) => {
-  const sessionSlug = getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>);
+  const channelSlug = getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>);
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
   const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
   const mimeType = req.headers["content-type"]?.split(";")[0] || "audio/webm";
@@ -1090,7 +1103,7 @@ If there is no clear speech, return an empty string.`;
     }
 
     const segment = createLiveCaptionSegment({
-      sessionSlug,
+      channelSlug,
       speaker: "Live Audio",
       text: transcript,
       sourceLang,
@@ -1101,7 +1114,7 @@ If there is no clear speech, return an empty string.`;
     res.json({
       status: "published",
       transcript,
-      caption: segment,
+      caption: serializeLiveCaptionSegment(segment),
       engine: `Gemini ${GEMINI_MODEL} Audio`
     });
   } catch (error: unknown) {
@@ -1133,35 +1146,35 @@ app.delete("/api/translation-errors", (_req, res) => {
 
 app.get("/api/captions/queue", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  const sessionSlug = getCaptionSessionKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
+  const channelSlug = getCaptionChannelKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const limit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.limit, "20")) || 20));
   const captions = liveCaptionQueue
-    .filter((segment) => segment.sessionSlug === sessionSlug)
+    .filter((segment) => segment.channelSlug === channelSlug)
     .slice(-limit);
 
   res.json({
-    channelSlug: sessionSlug,
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     count: captions.length,
-    captions
+    captions: captions.map(serializeLiveCaptionSegment)
   });
 });
 
 app.get("/api/captions/transcripts", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  const sessionSlug = getCaptionSessionKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
+  const channelSlug = getCaptionChannelKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const limit = Math.min(50, Math.max(1, Number(getQueryValue(req.query.limit, "10")) || 10));
   const documents = liveTranscriptDocuments
-    .filter((document) => document.sessionSlug === sessionSlug)
+    .filter((document) => document.channelSlug === channelSlug)
     .slice(0, limit);
 
   res.json({
-    channelSlug: sessionSlug,
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     count: documents.length,
     documents: documents.map((document) => ({
       ...document,
-      channelSlug: document.sessionSlug
+      sessionSlug: document.channelSlug
     }))
   });
 });
@@ -1182,7 +1195,7 @@ app.post("/api/captions/publish", (req, res) => {
   }
 
   const segment = createLiveCaptionSegment({
-    sessionSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
+    channelSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
     timestamp,
     speaker,
     text,
@@ -1194,9 +1207,9 @@ app.post("/api/captions/publish", (req, res) => {
 
   res.json({
     status: "queued",
-    caption: segment,
+    caption: serializeLiveCaptionSegment(segment),
     subscribers: Array.from(captionStreamSubscribers.values())
-      .filter((subscriber) => subscriber.sessionSlug === segment.sessionSlug)
+      .filter((subscriber) => subscriber.channelSlug === segment.channelSlug)
       .length
   });
 });
@@ -1216,7 +1229,7 @@ app.post("/api/captions/demo/start", (req, res) => {
   res.json({
     status: "started",
     producer: startDemoCaptionProducer({
-      sessionSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
+      channelSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
       sourceLang,
       intervalMs: Number(intervalMs) || 3500
     })
@@ -1225,12 +1238,12 @@ app.post("/api/captions/demo/start", (req, res) => {
 
 app.post("/api/captions/demo/stop", (req, res) => {
   const { channelSlug, sessionSlug } = req.body;
-  const sessionKey = getCaptionSessionKey(getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }));
-  const stopped = stopDemoCaptionProducer(sessionKey);
+  const channelKey = getCaptionChannelKey(getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }));
+  const stopped = stopDemoCaptionProducer(channelKey);
 
   res.json({
     status: stopped ? "stopped" : "not-running",
-    producer: getDemoCaptionProducerStatus(sessionKey)
+    producer: getDemoCaptionProducerStatus(channelKey)
   });
 });
 
@@ -1238,7 +1251,7 @@ app.get("/api/captions/stream", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
   const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
   const targetLang = getQueryValue(req.query.targetLang, "ko").toLowerCase();
-  const sessionSlug = getCaptionSessionKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
+  const channelSlug = getCaptionChannelKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const replayLatest = getQueryValue(req.query.replayLatest, "true") !== "false";
   const replayLimit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.replayLimit, "50")) || 50));
   const subscriberId = `subscriber-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1259,7 +1272,7 @@ app.get("/api/captions/stream", (req, res) => {
 
   const subscriber: CaptionStreamSubscriber = {
     id: subscriberId,
-    sessionSlug,
+    channelSlug,
     targetLang,
     fallbackSourceLang: sourceLang,
     writeEvent,
@@ -1275,16 +1288,16 @@ app.get("/api/captions/stream", (req, res) => {
 
   writeEvent("stream-ready", {
     subscriberId,
-    channelSlug: sessionSlug,
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     sourceLang,
     targetLang,
-    queuedCaptions: liveCaptionQueue.filter((segment) => segment.sessionSlug === sessionSlug).length
+    queuedCaptions: liveCaptionQueue.filter((segment) => segment.channelSlug === channelSlug).length
   });
 
   if (replayLatest) {
     const replaySegments = liveCaptionQueue
-      .filter((segment) => segment.sessionSlug === sessionSlug)
+      .filter((segment) => segment.channelSlug === channelSlug)
       .slice(-replayLimit);
 
     replaySegments.forEach((segment) => writeLiveCaptionEvent(subscriber, segment));
@@ -1422,13 +1435,13 @@ function summarizeLiveServerMessage(message: LiveServerMessageLike) {
 
 function createLiveCaptionPublisher({
   socket,
-  sessionSlug,
+  channelSlug,
   sourceLang,
   targetLang,
   document
 }: {
   socket: WebSocket;
-  sessionSlug: string;
+  channelSlug: string;
   sourceLang: string;
   targetLang: string;
   document: LiveTranscriptDocument;
@@ -1456,7 +1469,7 @@ function createLiveCaptionPublisher({
       const draftSegment = createLiveCaptionSegment({
         id: currentDraftId,
         sequence: currentDraftSequence,
-        sessionSlug,
+        channelSlug,
         speaker: "Live Audio",
         text: normalizedText,
         sourceLang,
@@ -1479,7 +1492,7 @@ function createLiveCaptionPublisher({
     const segment = createLiveCaptionSegment({
       id: finalSegmentId,
       sequence: finalSegmentSequence,
-      sessionSlug,
+      channelSlug,
       speaker: "Live Audio",
       text: normalizedText,
       sourceLang,
@@ -1810,7 +1823,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
   audioLiveWss.on("connection", (socket, request) => {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
-    const sessionSlug = getCaptionSessionKey(requestUrl.searchParams.get("channelSlug") ?? requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
+    const channelSlug = getCaptionChannelKey(requestUrl.searchParams.get("channelSlug") ?? requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
     const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "auto").toLowerCase();
     const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
     const translationMode: LiveTranslationMode = requestUrl.searchParams.get("mode") === "realtime" ? "realtime" : "sentence";
@@ -1821,11 +1834,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     let audioFrameCount = 0;
     let liveServerMessageCount = 0;
     let didSaveTranscriptDocument = false;
-    clearLiveCaptionQueue(sessionSlug);
-    const transcriptDocument = createLiveTranscriptDocument(sessionSlug, targetLang);
+    clearLiveCaptionQueue(channelSlug);
+    const transcriptDocument = createLiveTranscriptDocument(channelSlug, targetLang);
     const publishLiveTranscript = createLiveCaptionPublisher({
       socket,
-      sessionSlug,
+      channelSlug,
       sourceLang: targetLang,
       targetLang,
       document: transcriptDocument
@@ -1935,7 +1948,8 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
         sendAudioLiveSocketMessage(socket, {
           type: "ready",
-          sessionSlug,
+          channelSlug,
+          sessionSlug: channelSlug,
           sourceLang,
           targetLang,
           mimeType,

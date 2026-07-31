@@ -22,7 +22,7 @@ function normalizeLayout(layout: PlatformLayout): PlatformLayout {
   return {
     ...layout,
     channelId: layout.channelId ?? layout.sessionId ?? "",
-    sessionId: layout.sessionId ?? layout.channelId,
+    sessionId: layout.sessionId,
     canvasWidth: layout.canvasWidth ?? 1920,
     canvasHeight: layout.canvasHeight ?? 1080,
     backgroundFit: layout.backgroundFit ?? "cover",
@@ -86,7 +86,7 @@ function normalizeDisplay(display: PlatformDisplayTarget): PlatformDisplayTarget
   return {
     ...display,
     channelId: display.channelId ?? display.sessionId ?? "",
-    sessionId: display.sessionId ?? display.channelId
+    sessionId: display.sessionId
   };
 }
 

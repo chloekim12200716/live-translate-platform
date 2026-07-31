@@ -115,7 +115,6 @@ export function loadStoredVideoMetadata(channelSlug: string): PlatformVideoSourc
 export async function saveStoredVideoUrl(channelSlug: string, url: string) {
   const metadata: PlatformVideoSourceMetadata = {
     channelSlug,
-    sessionSlug: channelSlug,
     sourceType: "url",
     url,
     updatedAt: new Date().toISOString()
@@ -135,7 +134,6 @@ export async function saveStoredVideoUrl(channelSlug: string, url: string) {
 export async function saveStoredVideoFile(channelSlug: string, file: File) {
   const metadata: PlatformVideoSourceMetadata = {
     channelSlug,
-    sessionSlug: channelSlug,
     sourceType: "file",
     fileName: file.name,
     fileType: file.type,
