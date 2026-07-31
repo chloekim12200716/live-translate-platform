@@ -75,8 +75,7 @@ function createLiveAudioWebSocketUrl(channelSlug: string, targetLanguageCode: st
 
 function createCaptionOverlayPath(channelSlug: string, targetLanguageCode: string, layoutId: string) {
   const params = new URLSearchParams({
-    layoutId,
-    overlay: "caption"
+    layoutId
   });
 
   return `/live/${channelSlug}/${targetLanguageCode}?${params.toString()}`;
@@ -456,7 +455,7 @@ export default function LiveAudioTranslationTester({
       </div>
 
       <p className="mt-3 text-xs leading-relaxed text-slate-500">
-        Chrome 공유 창에서 오디오가 재생 중인 탭을 선택하고 `Share tab audio`를 켜세요. `/live/...` 사용자 화면은 여기서 publish된 자막을 받는 표시용 화면입니다.
+        Chrome 공유 창에서 오디오가 재생 중인 탭을 선택하고 `Share tab audio`를 켜세요. `/live/...` 자막 오버레이 화면은 여기서 publish된 자막을 받아 표시합니다.
         문장 단위 모드는 최종 transcript 저장에 적합하고, 실시간 반영 모드는 draft 자막을 더 빨리 보여줍니다.
         실제 응답 시간은 Gemini Live API 상태와 네트워크에 영향을 받습니다.
         통역 음성은 Gemini Live Translate의 음성 복제 결과를 재생하므로 남/여 음성 보존이 항상 정확하게 보장되지는 않습니다.

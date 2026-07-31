@@ -478,14 +478,14 @@ export default function ChannelLayoutEditorPage() {
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-slate-950 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-slate-800 sm:flex-none"
             >
-              저장 후 미리보기
+              저장 후 자막 미리보기
             </Link>
             <Link
-              to={`/live/${mockPlatformChannel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&overlay=caption`}
+              to={`/live/${mockPlatformChannel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&view=full`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-emerald-700 sm:flex-none"
             >
-              자막 오버레이
+              전체 레이아웃 보기
             </Link>
           </div>
         </div>

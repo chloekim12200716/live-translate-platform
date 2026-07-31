@@ -14,7 +14,8 @@ export default function LiveChannelPage() {
   const [searchParams] = useSearchParams();
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
   const requestedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
-  const overlayMode = searchParams.get("overlay") === "caption" ? "caption" : "none";
+  const shouldShowFullLayout = searchParams.get("view") === "full" || searchParams.get("overlay") === "none";
+  const overlayMode = shouldShowFullLayout ? "none" : "caption";
   const transparentBackground = overlayMode === "caption"
     || ["1", "true", "yes"].includes((searchParams.get("transparent") ?? "").toLowerCase());
   const fallbackLayout = mockPlatformLayouts.find((layout) => layout.id === requestedLayoutId)
