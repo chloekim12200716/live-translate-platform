@@ -11,6 +11,7 @@ import {
 } from "../../utils/layoutEditor";
 import CaptionStreamDemoControls from "./CaptionStreamDemoControls";
 import CaptionComponent from "./CaptionComponent";
+import InterpretationAudioPlayer from "./InterpretationAudioPlayer";
 import NoticeComponent from "./NoticeComponent";
 import QAComponent from "./QAComponent";
 import SlideComponent from "./SlideComponent";
@@ -22,6 +23,7 @@ interface DisplayRendererProps {
   languageCode: string;
   overlayMode?: "none" | "caption";
   transparentBackground?: boolean;
+  enableInterpretationAudio?: boolean;
 }
 
 interface TranscriptEntry {
@@ -86,7 +88,8 @@ export default function DisplayRenderer({
   channel,
   languageCode,
   overlayMode = "none",
-  transparentBackground = false
+  transparentBackground = false,
+  enableInterpretationAudio = false
 }: DisplayRendererProps) {
   const canvasRatio = layout.canvasWidth / layout.canvasHeight;
   const isCaptionOverlay = overlayMode === "caption";
@@ -254,6 +257,14 @@ export default function DisplayRenderer({
             )}
           </div>
         </div>
+      )}
+
+      {enableInterpretationAudio && (
+        <InterpretationAudioPlayer
+          channelSlug={channel.slug}
+          languageCode={languageCode}
+          isOverlay={isCaptionOverlay}
+        />
       )}
     </div>
   );

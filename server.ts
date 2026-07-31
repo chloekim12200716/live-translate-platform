@@ -23,6 +23,10 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.5-live-translate-preview";
 const GEMINI_LIVE_API_VERSION = process.env.GEMINI_LIVE_API_VERSION || "v1alpha";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
+const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || "ar,zh,en,fr,ko,ru,es")
+  .split(",")
+  .map((languageCode) => languageCode.trim().toLowerCase())
+  .filter(Boolean);
 
 const translationLanguageLabels: Record<string, string> = {
   ar: "Arabic",
@@ -483,6 +487,7 @@ interface Note {
 interface LiveCaptionSegment {
   id: string;
   channelSlug: string;
+  targetLang?: string;
   timestamp: number;
   speaker: string;
   text: string;
@@ -674,6 +679,7 @@ function createLiveCaptionSegment({
   id,
   sequence,
   channelSlug,
+  targetLang,
   timestamp,
   speaker,
   text,
@@ -683,6 +689,7 @@ function createLiveCaptionSegment({
   id?: string;
   sequence?: number;
   channelSlug?: string;
+  targetLang?: string;
   timestamp?: number;
   speaker?: string;
   text: string;
@@ -696,6 +703,7 @@ function createLiveCaptionSegment({
   return {
     id: id ?? `caption-${Date.now()}-${nextSequence}`,
     channelSlug: getCaptionChannelKey(channelSlug),
+    targetLang: targetLang?.toLowerCase(),
     timestamp: Number(timestamp) || 0,
     speaker: speaker || "Speaker",
     text: cleanedText,
@@ -789,6 +797,7 @@ function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: bo
 
   captionStreamSubscribers.forEach((subscriber) => {
     if (subscriber.channelSlug !== segment.channelSlug) return;
+    if (segment.targetLang && segment.targetLang !== subscriber.targetLang) return;
     writeLiveCaptionEvent(subscriber, segment);
   });
 }
@@ -1276,6 +1285,7 @@ app.get("/api/captions/stream", (req, res) => {
   if (replayLatest) {
     const replaySegments = liveCaptionQueue
       .filter((segment) => segment.channelSlug === channelSlug)
+      .filter((segment) => !segment.targetLang || segment.targetLang === targetLang)
       .slice(-replayLimit);
 
     replaySegments.forEach((segment) => writeLiveCaptionEvent(subscriber, segment));
@@ -1290,6 +1300,15 @@ interface GeminiLiveConnectionLike {
   }) => void;
   close: () => void;
 }
+
+interface AudioInterpretationSubscriber {
+  id: string;
+  channelSlug: string;
+  targetLang: string;
+  socket: WebSocket;
+}
+
+const audioInterpretationSubscribers = new Map<string, AudioInterpretationSubscriber>();
 
 interface LiveServerMessageLike {
   setupComplete?: unknown;
@@ -1340,16 +1359,27 @@ function getAudioSampleRateFromMimeType(mimeType: string | undefined) {
   return matchedRate ? Number(matchedRate) : 24000;
 }
 
-function forwardLiveTranslatedAudio(socket: WebSocket, message: LiveServerMessageLike) {
+function broadcastLiveTranslatedAudio(channelSlug: string, targetLang: string, message: LiveServerMessageLike) {
   const audioParts = message.serverContent?.modelTurn?.parts?.filter((part) => part.inlineData?.data) ?? [];
+  const normalizedChannelSlug = getCaptionChannelKey(channelSlug);
+  const normalizedTargetLang = targetLang.toLowerCase();
 
   audioParts.forEach((part) => {
     const mimeType = part.inlineData?.mimeType || "audio/pcm;rate=24000";
-    sendAudioLiveSocketMessage(socket, {
+    const payload = JSON.stringify({
       type: "translation-audio",
+      channelSlug: normalizedChannelSlug,
+      targetLang: normalizedTargetLang,
       audio: part.inlineData?.data,
       mimeType,
       sampleRate: getAudioSampleRateFromMimeType(mimeType)
+    });
+
+    audioInterpretationSubscribers.forEach((subscriber) => {
+      if (subscriber.channelSlug !== normalizedChannelSlug) return;
+      if (subscriber.targetLang !== normalizedTargetLang) return;
+      if (subscriber.socket.readyState !== WebSocket.OPEN) return;
+      subscriber.socket.send(payload);
     });
   });
 
@@ -1386,6 +1416,21 @@ function getLiveTranslateTargetLanguageCode(languageCode: string) {
   return targetLanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
 }
 
+function getLiveTargetLanguages(requestUrl: URL) {
+  const requestedTargetLangs = requestUrl.searchParams.get("targetLangs");
+  const requestedTargetLang = requestUrl.searchParams.get("targetLang");
+  const rawTargetLanguages = requestedTargetLangs
+    ? requestedTargetLangs.split(",")
+    : requestedTargetLang
+      ? [requestedTargetLang]
+      : DEFAULT_LIVE_TARGET_LANGUAGES;
+  const normalizedTargetLanguages = rawTargetLanguages
+    .map((languageCode) => languageCode.trim().toLowerCase())
+    .filter(Boolean);
+
+  return Array.from(new Set(normalizedTargetLanguages.length > 0 ? normalizedTargetLanguages : DEFAULT_LIVE_TARGET_LANGUAGES));
+}
+
 function getPrimaryLanguageCode(languageCode: string | undefined) {
   if (!languageCode) return "";
   return languageCode.toLowerCase().split("-")[0] || "";
@@ -1416,12 +1461,14 @@ function createLiveCaptionPublisher({
   channelSlug,
   sourceLang,
   targetLang,
+  targetLangScope,
   document
 }: {
   socket: WebSocket;
   channelSlug: string;
   sourceLang: string;
   targetLang: string;
+  targetLangScope?: string;
   document: LiveTranscriptDocument;
 }) {
   let currentDraftId = "";
@@ -1448,6 +1495,7 @@ function createLiveCaptionPublisher({
         id: currentDraftId,
         sequence: currentDraftSequence,
         channelSlug,
+        targetLang: targetLangScope,
         speaker: "Live Audio",
         text: normalizedText,
         sourceLang,
@@ -1456,6 +1504,7 @@ function createLiveCaptionPublisher({
       publishLiveCaption(draftSegment, { persist: false });
       sendAudioLiveSocketMessage(socket, {
         type: "caption",
+        targetLang,
         transcript: normalizedText,
         sequence: draftSegment.sequence,
         engine,
@@ -1471,6 +1520,7 @@ function createLiveCaptionPublisher({
       id: finalSegmentId,
       sequence: finalSegmentSequence,
       channelSlug,
+      targetLang: targetLangScope,
       speaker: "Live Audio",
       text: normalizedText,
       sourceLang,
@@ -1489,6 +1539,7 @@ function createLiveCaptionPublisher({
     lastDraftText = "";
     sendAudioLiveSocketMessage(socket, {
       type: "caption",
+      targetLang,
       transcript: normalizedText,
       sequence: segment.sequence,
       engine,
@@ -1711,6 +1762,15 @@ function createLiveTranscriptBuffer({
     }
 
     if (!shouldPublishTranscriptText(normalizedText)) {
+      if (shouldPublishTranscriptText(normalizedSourceText)) {
+        sendAudioLiveSocketMessage(socket, {
+          type: "debug",
+          message: `source transcript fallback (${reason}): ${normalizedSourceText.length} chars`
+        });
+        await translateAndPublishSourceText(normalizedSourceText, true, `${reason}-source-fallback`);
+        return;
+      }
+
       if (normalizedText) {
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
@@ -1798,53 +1858,95 @@ function createLiveTranscriptBuffer({
 
 function installAudioLiveWebSocketServer(server: HttpServer) {
   const audioLiveWss = new WebSocketServer({ noServer: true });
+  const audioInterpretationWss = new WebSocketServer({ noServer: true });
+
+  audioInterpretationWss.on("connection", (socket, request) => {
+    const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
+    const channelSlug = getCaptionChannelKey(requestUrl.searchParams.get("channelSlug") ?? "main-keynote");
+    const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
+    const subscriberId = `audio-subscriber-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    audioInterpretationSubscribers.set(subscriberId, {
+      id: subscriberId,
+      channelSlug,
+      targetLang,
+      socket
+    });
+    sendAudioLiveSocketMessage(socket, {
+      type: "ready",
+      subscriberId,
+      channelSlug,
+      targetLang
+    });
+
+    socket.on("close", () => {
+      audioInterpretationSubscribers.delete(subscriberId);
+    });
+    socket.on("error", () => {
+      audioInterpretationSubscribers.delete(subscriberId);
+    });
+  });
 
   audioLiveWss.on("connection", (socket, request) => {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
     const channelSlug = getCaptionChannelKey(requestUrl.searchParams.get("channelSlug") ?? "main-keynote");
     const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "auto").toLowerCase();
-    const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
+    const targetLangs = getLiveTargetLanguages(requestUrl);
     const translationMode: LiveTranslationMode = requestUrl.searchParams.get("mode") === "realtime" ? "realtime" : "sentence";
     const mimeType = requestUrl.searchParams.get("mimeType") || "audio/webm;codecs=opus";
     const pendingFrames: Buffer[] = [];
-    let liveConnection: GeminiLiveConnectionLike | null = null;
+    const liveConnections = new Map<string, GeminiLiveConnectionLike>();
+    const liveTranscriptBuffers = new Map<string, ReturnType<typeof createLiveTranscriptBuffer>>();
+    const transcriptDocuments = new Map<string, LiveTranscriptDocument>();
     let isClosed = false;
+    let isReadyToSendFrames = false;
     let audioFrameCount = 0;
     let liveServerMessageCount = 0;
     let didSaveTranscriptDocument = false;
     clearLiveCaptionQueue(channelSlug);
-    const transcriptDocument = createLiveTranscriptDocument(channelSlug, targetLang);
-    const publishLiveTranscript = createLiveCaptionPublisher({
-      socket,
-      channelSlug,
-      sourceLang: targetLang,
-      targetLang,
-      document: transcriptDocument
-    });
-    const liveTranscriptBuffer = createLiveTranscriptBuffer({
-      socket,
-      publishTranscript: publishLiveTranscript,
-      mode: translationMode,
-      sourceLang,
-      targetLang
+
+    targetLangs.forEach((targetLang) => {
+      const transcriptDocument = createLiveTranscriptDocument(channelSlug, targetLang);
+      transcriptDocuments.set(targetLang, transcriptDocument);
+      const publishLiveTranscript = createLiveCaptionPublisher({
+        socket,
+        channelSlug,
+        sourceLang: targetLang,
+        targetLang,
+        targetLangScope: targetLang,
+        document: transcriptDocument
+      });
+      liveTranscriptBuffers.set(targetLang, createLiveTranscriptBuffer({
+        socket,
+        publishTranscript: publishLiveTranscript,
+        mode: translationMode,
+        sourceLang,
+        targetLang
+      }));
     });
 
-    const flushPendingFrames = () => {
-      if (!liveConnection) return;
-
-      while (pendingFrames.length > 0) {
-        const frame = pendingFrames.shift();
-        if (!frame) continue;
+    const sendFrameToLiveConnections = (frame: Buffer) => {
+      liveConnections.forEach((liveConnection) => {
         liveConnection.sendRealtimeInput({
           audio: {
             data: frame.toString("base64"),
             mimeType
           }
         });
+      });
+    };
+
+    const flushPendingFrames = () => {
+      if (!isReadyToSendFrames || liveConnections.size === 0) return;
+
+      while (pendingFrames.length > 0) {
+        const frame = pendingFrames.shift();
+        if (!frame) continue;
+        sendFrameToLiveConnections(frame);
       }
     };
 
-    const connectLiveConnection = async () => {
+    const connectLiveConnection = async (targetLang: string) => {
       if (!liveAiClient) {
         sendAudioLiveSocketMessage(socket, {
           type: "error",
@@ -1858,10 +1960,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         sendAudioLiveSocketMessage(socket, {
           type: "connecting",
           model: GEMINI_LIVE_MODEL,
+          targetLang,
           message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, input=auto, target=${getLiveTranslateTargetLanguageCode(targetLang)}, mode=${translationMode}`
         });
 
-        liveConnection = await (liveAiClient as any).live.connect({
+        const liveConnection = await (liveAiClient as any).live.connect({
           model: GEMINI_LIVE_MODEL,
           config: {
             responseModalities: ["AUDIO"],
@@ -1876,18 +1979,20 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             onopen: () => {
               sendAudioLiveSocketMessage(socket, {
                 type: "open",
-                model: GEMINI_LIVE_MODEL
+                model: GEMINI_LIVE_MODEL,
+                targetLang
               });
             },
             onmessage: (message: LiveServerMessageLike) => {
               liveServerMessageCount += 1;
-              const forwardedAudioChunks = forwardLiveTranslatedAudio(socket, message);
-              liveTranscriptBuffer.handleLiveMessage(message);
+              const forwardedAudioChunks = broadcastLiveTranslatedAudio(channelSlug, targetLang, message);
+              liveTranscriptBuffers.get(targetLang)?.handleLiveMessage(message);
 
               if (liveServerMessageCount <= 8 || liveServerMessageCount % 20 === 0) {
                 sendAudioLiveSocketMessage(socket, {
                   type: "debug",
-                  message: `Live message #${liveServerMessageCount}: ${summarizeLiveServerMessage(message)}${
+                  targetLang,
+                  message: `Live message #${liveServerMessageCount} (${targetLang}): ${summarizeLiveServerMessage(message)}${
                     forwardedAudioChunks > 0 ? `, audioChunks:${forwardedAudioChunks}` : ""
                   }`
                 });
@@ -1899,10 +2004,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
                 error,
                 text: "[Gemini Live audio connection]",
                 sourceLang,
-                targetLang: "live-transcription"
+                targetLang
               });
               sendAudioLiveSocketMessage(socket, {
                 type: "error",
+                targetLang,
                 message
               });
             },
@@ -1911,6 +2017,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
               const closeReason = event?.reason || "";
               sendAudioLiveSocketMessage(socket, {
                 type: "closed",
+                targetLang,
                 code: closeCode,
                 reason: closeReason,
                 wasClean: event?.wasClean
@@ -1923,44 +2030,75 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           liveConnection.close();
           return;
         }
-
-        sendAudioLiveSocketMessage(socket, {
-          type: "ready",
-          channelSlug,
-          sourceLang,
-          targetLang,
-          mimeType,
-          mode: translationMode,
-          transcriptDocumentId: transcriptDocument.id
-        });
-        flushPendingFrames();
+        liveConnections.set(targetLang, liveConnection);
       } catch (error) {
         recordTranslationError({
           error,
           text: "[Gemini Live audio connect]",
           sourceLang,
-          targetLang: "live-transcription"
+          targetLang
         });
         sendAudioLiveSocketMessage(socket, {
           type: "error",
+          targetLang,
           message: error instanceof Error ? error.message : String(error)
         });
-        socket.close(1011, "Gemini Live connection failed");
       }
     };
 
-    void connectLiveConnection();
+    const connectLiveConnections = async () => {
+      await Promise.all(targetLangs.map((targetLang) => connectLiveConnection(targetLang)));
+
+      if (isClosed) {
+        liveConnections.forEach((liveConnection) => liveConnection.close());
+        return;
+      }
+
+      if (liveConnections.size === 0) {
+        socket.close(1011, "Gemini Live connection failed");
+        return;
+      }
+
+      isReadyToSendFrames = true;
+      sendAudioLiveSocketMessage(socket, {
+        type: "ready",
+        channelSlug,
+        sourceLang,
+        targetLangs: Array.from(liveConnections.keys()),
+        mimeType,
+        mode: translationMode,
+        transcriptDocumentIds: Array.from(transcriptDocuments.values()).map((document) => document.id)
+      });
+      flushPendingFrames();
+    };
+
+    void connectLiveConnections();
 
     socket.on("message", (data, isBinary) => {
       if (!isBinary) {
         try {
           const message = JSON.parse(data.toString()) as { type?: string; text?: string };
           if (message.type === "text" && message.text) {
-            publishLiveTranscript(message.text, "Client Text Frame");
+            liveTranscriptBuffers.forEach((_buffer, targetLang) => {
+              const document = transcriptDocuments.get(targetLang);
+              if (!document) return;
+              createLiveCaptionPublisher({
+                socket,
+                channelSlug,
+                sourceLang: targetLang,
+                targetLang,
+                targetLangScope: targetLang,
+                document
+              })(message.text, "Client Text Frame");
+            });
           }
           if (message.type === "end") {
-            void liveTranscriptBuffer.flush("client-end");
-            liveConnection?.sendRealtimeInput({ audioStreamEnd: true });
+            liveTranscriptBuffers.forEach((liveTranscriptBuffer) => {
+              void liveTranscriptBuffer.flush("client-end");
+            });
+            liveConnections.forEach((liveConnection) => {
+              liveConnection.sendRealtimeInput({ audioStreamEnd: true });
+            });
           }
         } catch {
           sendAudioLiveSocketMessage(socket, {
@@ -1985,7 +2123,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           message: `audio frame received #${audioFrameCount} (${frame.length} bytes)`
         });
       }
-      if (!liveConnection) {
+      if (!isReadyToSendFrames || liveConnections.size === 0) {
         pendingFrames.push(frame);
         if (pendingFrames.length > 80) {
           pendingFrames.shift();
@@ -1993,44 +2131,43 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         return;
       }
 
-      liveConnection.sendRealtimeInput({
-        audio: {
-          data: frame.toString("base64"),
-          mimeType
-        }
-      });
+      sendFrameToLiveConnections(frame);
     });
 
     socket.on("close", () => {
       isClosed = true;
-      void liveTranscriptBuffer.flush("socket-close")
+      void Promise.all(Array.from(liveTranscriptBuffers.values()).map((liveTranscriptBuffer) => liveTranscriptBuffer.flush("socket-close")))
         .finally(() => {
-          liveTranscriptBuffer.dispose();
+          liveTranscriptBuffers.forEach((liveTranscriptBuffer) => liveTranscriptBuffer.dispose());
         })
         .finally(() => {
           if (didSaveTranscriptDocument) return;
           didSaveTranscriptDocument = true;
-          return saveLiveTranscriptDocument(transcriptDocument);
+          return Promise.all(Array.from(transcriptDocuments.values()).map(saveLiveTranscriptDocument));
         })
           .then(() => {
-            if (transcriptDocument.filePath) {
-              console.log(`Saved live transcript document: ${transcriptDocument.filePath}`);
-            }
+            transcriptDocuments.forEach((transcriptDocument) => {
+              if (transcriptDocument.filePath) {
+                console.log(`Saved live transcript document: ${transcriptDocument.filePath}`);
+              }
+            });
           })
           .catch((error) => {
             recordTranslationError({
               error,
               text: "[Live transcript document save]",
               sourceLang,
-              targetLang
+              targetLang: targetLangs.join(",")
             });
           });
       try {
-        liveConnection?.sendRealtimeInput({ audioStreamEnd: true });
+        liveConnections.forEach((liveConnection) => {
+          liveConnection.sendRealtimeInput({ audioStreamEnd: true });
+        });
       } catch {
         // Closing should not fail the HTTP server.
       }
-      liveConnection?.close();
+      liveConnections.forEach((liveConnection) => liveConnection.close());
     });
 
     socket.on("error", (error) => {
@@ -2045,6 +2182,13 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
   server.on("upgrade", (request, socket, head) => {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
+    if (requestUrl.pathname === "/api/audio/interpretation") {
+      audioInterpretationWss.handleUpgrade(request, socket, head, (webSocket) => {
+        audioInterpretationWss.emit("connection", webSocket, request);
+      });
+      return;
+    }
+
     if (requestUrl.pathname !== "/api/audio/live") {
       return;
     }

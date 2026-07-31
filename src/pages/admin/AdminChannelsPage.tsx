@@ -588,18 +588,39 @@ export default function AdminChannelsPage() {
                   </button>
                 </div>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {selectedDisplayUrls.map((displayUrl) => (
-                    <Link
-                      key={displayUrl.path}
-                      to={displayUrl.path}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
-                    >
-                      <p className="text-xs font-bold text-slate-900">{displayUrl.languageCode.toUpperCase()} 자막 화면</p>
-                      <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
-                    </Link>
-                  ))}
+                  {selectedDisplayUrls.map((displayUrl) => {
+                    const interpretationPath = `${displayUrl.path}${displayUrl.path.includes("?") ? "&" : "?"}audio=1`;
+
+                    return (
+                      <article
+                        key={displayUrl.path}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                      >
+                        <p className="text-xs font-bold text-slate-900">{displayUrl.languageCode.toUpperCase()} 자막 화면</p>
+                        <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Link
+                            to={displayUrl.path}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-700 hover:bg-slate-100"
+                          >
+                            자막
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                          <Link
+                            to={interpretationPath}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-800 hover:bg-emerald-100"
+                          >
+                            통역
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
 
