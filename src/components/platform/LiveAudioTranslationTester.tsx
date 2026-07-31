@@ -1,8 +1,11 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink, Radio, ScreenShare, Send, Square } from "lucide-react";
 
 interface LiveAudioTranslationTesterProps {
   sessionSlug: string;
+  layoutId?: string;
+  displayName?: string;
+  defaultTargetLanguageCode?: string;
 }
 
 const languageOptions = [
@@ -70,9 +73,9 @@ function createLiveAudioWebSocketUrl(sessionSlug: string, targetLanguageCode: st
   return `${protocol}//${window.location.host}/api/audio/live?${params.toString()}`;
 }
 
-function createCaptionOverlayPath(sessionSlug: string, targetLanguageCode: string) {
+function createCaptionOverlayPath(sessionSlug: string, targetLanguageCode: string, layoutId: string) {
   const params = new URLSearchParams({
-    layoutId: "layout-default-live-stage",
+    layoutId,
     overlay: "caption"
   });
 
@@ -80,9 +83,12 @@ function createCaptionOverlayPath(sessionSlug: string, targetLanguageCode: strin
 }
 
 export default function LiveAudioTranslationTester({
-  sessionSlug
+  sessionSlug,
+  layoutId = "layout-default-live-stage",
+  displayName = "선택된 플랫폼",
+  defaultTargetLanguageCode = "ko"
 }: LiveAudioTranslationTesterProps) {
-  const [targetLanguageCode, setTargetLanguageCode] = useState("ko");
+  const [targetLanguageCode, setTargetLanguageCode] = useState(defaultTargetLanguageCode);
   const [translationMode, setTranslationMode] = useState<"realtime" | "sentence">("sentence");
   const [isCapturing, setIsCapturing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -92,7 +98,7 @@ export default function LiveAudioTranslationTester({
   const [receivedAudioChunks, setReceivedAudioChunks] = useState(0);
   const [isInterpretationAudioEnabled, setIsInterpretationAudioEnabled] = useState(false);
   const [diagnosticEvents, setDiagnosticEvents] = useState<string[]>([]);
-  const captionOverlayPath = createCaptionOverlayPath(sessionSlug, targetLanguageCode);
+  const captionOverlayPath = createCaptionOverlayPath(sessionSlug, targetLanguageCode, layoutId);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -102,6 +108,11 @@ export default function LiveAudioTranslationTester({
   const playbackAudioContextRef = useRef<AudioContext | null>(null);
   const nextPlaybackTimeRef = useRef(0);
   const interpretationAudioEnabledRef = useRef(false);
+
+  useEffect(() => {
+    if (isCapturing) return;
+    setTargetLanguageCode(defaultTargetLanguageCode);
+  }, [defaultTargetLanguageCode, isCapturing]);
 
   const pushDiagnosticEvent = (message: string) => {
     const timestamp = new Date().toLocaleTimeString("ko-KR", {
@@ -336,7 +347,7 @@ export default function LiveAudioTranslationTester({
           </div>
           <h3 className="mt-1 text-lg font-bold text-slate-900">저지연 오디오 전사/번역 테스트</h3>
           <p className="mt-1 text-sm text-slate-500">
-            입력 언어는 Gemini Live API가 자동 인식합니다. 이 버튼으로 YouTube 탭 또는 라이브 방송 탭의 오디오를 캡처해 선택한 언어로 번역합니다.
+            {displayName} 레이아웃으로 테스트합니다. 입력 언어는 Gemini Live API가 자동 인식하며 YouTube 탭 또는 라이브 방송 탭의 오디오를 선택한 언어로 번역합니다.
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">

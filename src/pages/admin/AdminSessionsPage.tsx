@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Settings2 } from "lucide-react";
 import {
-  mockDisplayUrls,
   mockPlatformDisplays,
   mockPlatformData,
   mockPlatformLayouts,
-  PlatformDisplayTarget
+  PlatformDisplayTarget,
+  PlatformDisplayUrl
 } from "../../data/mockPlatformData";
 import {
   deleteStoredPlatformDisplay,
@@ -60,8 +60,20 @@ function toSlug(value: string) {
     .replace(/^-+|-+$/g, "") || "platform";
 }
 
+function buildDisplayUrls(display: PlatformDisplayTarget, sessionSlug: string): PlatformDisplayUrl[] {
+  return supportedLanguages.map((languageCode) => ({
+    displayId: display.id,
+    layoutId: display.layoutId,
+    sessionSlug,
+    languageCode,
+    label: `${display.name} · ${languageCode.toUpperCase()}`,
+    path: `/live/${sessionSlug}/${languageCode}?layoutId=${display.layoutId}`
+  }));
+}
+
 export default function AdminSessionsPage() {
   const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformData.session.slug));
+  const [selectedDisplayId, setSelectedDisplayId] = useState(mockPlatformDisplays[0]?.id ?? "");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newDisplayDescription, setNewDisplayDescription] = useState("");
   const [newTemplateLayoutId, setNewTemplateLayoutId] = useState(mockPlatformData.layout.id);
@@ -69,19 +81,15 @@ export default function AdminSessionsPage() {
   const [translationErrors, setTranslationErrors] = useState<TranslationErrorLog[]>([]);
   const [transcriptDocuments, setTranscriptDocuments] = useState<TranscriptDocumentSummary[]>([]);
   const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
-  const displayUrls = [
-    ...mockDisplayUrls,
-    ...customDisplays.flatMap((display) =>
-      supportedLanguages.map((languageCode) => ({
-        displayId: display.id,
-        layoutId: display.layoutId,
-        sessionSlug: mockPlatformData.session.slug,
-        languageCode,
-        label: `${display.name} · ${languageCode.toUpperCase()}`,
-        path: `/live/${mockPlatformData.session.slug}/${languageCode}?layoutId=${display.layoutId}`
-      }))
-    )
-  ];
+  const sessionDisplays = allPlatformDisplays.filter((display) => display.sessionId === mockPlatformData.session.id);
+  const selectedDisplay = sessionDisplays.find((display) => display.id === selectedDisplayId) ?? sessionDisplays[0];
+  const selectedDisplayUrls = selectedDisplay ? buildDisplayUrls(selectedDisplay, mockPlatformData.session.slug) : [];
+  const selectedPreviewPath = selectedDisplay
+    ? `/live/${mockPlatformData.session.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}`
+    : `/live/${mockPlatformData.session.slug}/en`;
+  const selectedOverlayPath = selectedDisplay
+    ? `/live/${mockPlatformData.session.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}&overlay=caption`
+    : `/live/${mockPlatformData.session.slug}/en?overlay=caption`;
 
   const handleAddPlatformDisplay = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -112,6 +120,7 @@ export default function AdminSessionsPage() {
     saveStoredLayout(mockPlatformData.session.slug, nextLayout, layoutId);
     saveStoredPlatformDisplays(mockPlatformData.session.slug, nextDisplays);
     setCustomDisplays(nextDisplays);
+    setSelectedDisplayId(nextDisplay.id);
     setNewDisplayName("");
     setNewDisplayDescription("");
     setNewTemplateLayoutId(mockPlatformData.layout.id);
@@ -120,7 +129,11 @@ export default function AdminSessionsPage() {
 
   const handleDeletePlatformDisplay = (displayId: string) => {
     deleteStoredPlatformDisplay(mockPlatformData.session.slug, displayId);
-    setCustomDisplays(loadStoredPlatformDisplays(mockPlatformData.session.slug));
+    const nextDisplays = loadStoredPlatformDisplays(mockPlatformData.session.slug);
+    setCustomDisplays(nextDisplays);
+    if (selectedDisplayId === displayId) {
+      setSelectedDisplayId(mockPlatformDisplays[0]?.id ?? nextDisplays[0]?.id ?? "");
+    }
   };
 
   const loadTranslationErrors = () => {
@@ -163,50 +176,146 @@ export default function AdminSessionsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid grid-cols-1 gap-4 border-b border-slate-200 p-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="grid gap-4 md:grid-cols-3">
+        <div className="border-b border-slate-200 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-            <p className="text-[11px] font-bold uppercase text-slate-400">Event</p>
-            <p className="text-sm font-semibold text-slate-900">{mockPlatformData.event.name}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Platform Workspace</p>
+              <h3 className="mt-1 text-lg font-bold text-slate-900">행사 / 세션 / 송출 플랫폼</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                먼저 세션을 확인하고, 테스트할 송출 플랫폼을 선택하면 URL·레이아웃 편집·실시간 번역 테스트가 해당 플랫폼 기준으로 바뀝니다.
+              </p>
             </div>
-            <div>
-            <p className="text-[11px] font-bold uppercase text-slate-400">Session</p>
-            <p className="text-sm font-semibold text-slate-900">{mockPlatformData.session.title}</p>
-            </div>
-            <div>
-            <p className="text-[11px] font-bold uppercase text-slate-400">Slug</p>
-            <p className="font-mono text-sm text-slate-700">{mockPlatformData.session.slug}</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
-            <p className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Primary Action</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">시청자 화면 레이아웃 편집</p>
             <Link
-              to={`/admin/sessions/${mockPlatformData.session.id}/layout`}
-              className="mt-3 flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-indigo-700"
+              to={selectedDisplay ? `/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}` : `/admin/sessions/${mockPlatformData.session.id}/layout`}
+              className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-indigo-700"
             >
-              레이아웃 편집 시작
+              선택 플랫폼 레이아웃 편집
             </Link>
           </div>
         </div>
 
-        <div className="grid gap-2 p-5 sm:grid-cols-2 lg:grid-cols-3">
-          {displayUrls.map((displayUrl) => (
-            <Link
-              key={displayUrl.path}
-              to={displayUrl.path}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
-            >
-              <p className="text-xs font-bold text-slate-900">{displayUrl.label}</p>
-              <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
-            </Link>
-          ))}
+        <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="border-b border-slate-200 bg-slate-50 p-5 lg:border-b-0 lg:border-r">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase text-slate-400">Event</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{mockPlatformData.event.name}</p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">{mockPlatformData.event.description}</p>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase text-slate-400">Session</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{mockPlatformData.session.title}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {mockPlatformData.session.speakerName} · {mockPlatformData.session.speakerAffiliation}
+              </p>
+              <p className="mt-2 font-mono text-[11px] text-indigo-600">{mockPlatformData.session.slug}</p>
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Platforms</p>
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600">
+                  {sessionDisplays.length}
+                </span>
+              </div>
+              <div className="mt-2 space-y-2">
+                {sessionDisplays.map((display) => {
+                  const isSelected = selectedDisplay?.id === display.id;
+
+                  return (
+                    <button
+                      key={display.id}
+                      type="button"
+                      onClick={() => setSelectedDisplayId(display.id)}
+                      className={`w-full rounded-xl border p-3 text-left transition ${
+                        isSelected
+                          ? "border-indigo-300 bg-indigo-50 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50"
+                      }`}
+                    >
+                      <span className="block text-sm font-bold text-slate-900">{display.name}</span>
+                      <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-slate-500">{display.description}</span>
+                      <span className="mt-2 block font-mono text-[10px] text-indigo-600">{display.layoutId}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+
+          <section className="p-5">
+            {selectedDisplay ? (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Selected Platform</p>
+                      <h3 className="mt-1 text-xl font-bold text-slate-900">{selectedDisplay.name}</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-600">{selectedDisplay.description}</p>
+                      <p className="mt-2 font-mono text-[11px] text-indigo-700">{selectedDisplay.layoutId}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}`}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-indigo-700"
+                      >
+                        레이아웃 편집
+                      </Link>
+                      <Link
+                        to={selectedPreviewPath}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-100"
+                      >
+                        사용자 화면
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                      <Link
+                        to={selectedOverlayPath}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-4 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-50"
+                      >
+                        자막 오버레이
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Language URLs</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {selectedDisplayUrls.map((displayUrl) => (
+                      <Link
+                        key={displayUrl.path}
+                        to={displayUrl.path}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+                      >
+                        <p className="text-xs font-bold text-slate-900">{displayUrl.languageCode.toUpperCase()} 화면</p>
+                        <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <LiveAudioTranslationTester
+                  sessionSlug={mockPlatformData.session.slug}
+                  layoutId={selectedDisplay.layoutId}
+                  displayName={selectedDisplay.name}
+                  defaultTargetLanguageCode={selectedDisplay.defaultLanguageCode}
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm font-semibold text-slate-600">
+                이 세션에 연결된 송출 플랫폼이 없습니다. 아래에서 플랫폼을 추가하세요.
+              </div>
+            )}
+          </section>
         </div>
       </div>
-
-      <LiveAudioTranslationTester
-        sessionSlug={mockPlatformData.session.slug}
-      />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -260,11 +369,11 @@ export default function AdminSessionsPage() {
             <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Viewer Verification</p>
             <h3 className="text-lg font-bold text-slate-900">언어별 사용자 화면 확인</h3>
             <p className="mt-1 text-sm text-slate-500">
-              WebSocket Live Audio 테스트에서 publish된 자막이 실제 사용자 URL에 표시되는지 관리자 화면 안과 별도 탭에서 함께 확인합니다.
+              선택한 플랫폼의 레이아웃으로 WebSocket Live Audio 테스트에서 publish된 자막이 실제 사용자 URL에 표시되는지 확인합니다.
             </p>
           </div>
           <Link
-            to={`/live/${mockPlatformData.session.slug}/en`}
+            to={selectedPreviewPath}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
@@ -276,7 +385,9 @@ export default function AdminSessionsPage() {
 
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           {livePreviewLanguages.map((language) => {
-            const livePath = `/live/${mockPlatformData.session.slug}/${language.code}`;
+            const livePath = selectedDisplay
+              ? `/live/${mockPlatformData.session.slug}/${language.code}?layoutId=${selectedDisplay.layoutId}`
+              : `/live/${mockPlatformData.session.slug}/${language.code}`;
 
             return (
               <article key={language.code} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -377,9 +488,15 @@ export default function AdminSessionsPage() {
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {allPlatformDisplays.map((display) => {
             const isCustomDisplay = customDisplays.some((customDisplay) => customDisplay.id === display.id);
+            const isSelected = selectedDisplay?.id === display.id;
 
             return (
-            <div key={display.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div
+              key={display.id}
+              className={`rounded-xl border p-4 ${
+                isSelected ? "border-indigo-300 bg-indigo-50 shadow-sm" : "border-slate-200 bg-slate-50"
+              }`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-slate-900">{display.name}</p>
@@ -394,6 +511,17 @@ export default function AdminSessionsPage() {
               </div>
               <p className="mt-3 font-mono text-[11px] text-indigo-600">{display.layoutId}</p>
               <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDisplayId(display.id)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-center text-[11px] font-bold ${
+                    isSelected
+                      ? "bg-indigo-600 text-white"
+                      : "border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
+                  }`}
+                >
+                  {isSelected ? "테스트 중" : "테스트 선택"}
+                </button>
                 <Link
                   to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
                   className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-indigo-700 hover:bg-indigo-50"
