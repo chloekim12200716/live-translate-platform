@@ -10,7 +10,8 @@ import {
 import { loadStoredLayout, loadStoredLayoutById } from "../../data/platformLayoutStorage";
 
 export default function LiveSessionPage() {
-  const { sessionSlug, languageCode } = useParams();
+  const { channelSlug, sessionSlug, languageCode } = useParams();
+  const resolvedChannelSlug = channelSlug ?? sessionSlug;
   const [searchParams] = useSearchParams();
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
   const requestedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
@@ -22,7 +23,7 @@ export default function LiveSessionPage() {
     ?? mockPlatformLayout;
   const layout = loadStoredLayout(mockPlatformSession.slug, fallbackLayout, fallbackLayout.id);
 
-  if (sessionSlug !== mockPlatformSession.slug) {
+  if (resolvedChannelSlug !== mockPlatformSession.slug) {
     return <Navigate to={`/live/${mockPlatformSession.slug}/${resolvedLanguage}`} replace />;
   }
 

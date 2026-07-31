@@ -138,7 +138,7 @@ export default function DisplayRenderer({
       {isHeaderVisible && !isCaptionOverlay && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-white">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Session</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Channel</p>
             <h1 className="text-xl font-bold md:text-2xl">{session.title}</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">

@@ -50,9 +50,10 @@ function toSlug(value: string) {
 }
 
 export default function SessionLayoutEditorPage() {
-  const { sessionId } = useParams();
+  const { channelId, sessionId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isKnownSession = sessionId === mockPlatformSession.id;
+  const resolvedChannelId = channelId ?? sessionId;
+  const isKnownChannel = resolvedChannelId === mockPlatformSession.id;
   const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformSession.slug));
   const selectedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
   const customLayouts = customDisplays
@@ -431,10 +432,10 @@ export default function SessionLayoutEditorPage() {
     });
   };
 
-  if (!isKnownSession) {
+  if (!isKnownChannel) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-        알 수 없는 세션입니다. 현재 mock 세션 ID는 <span className="font-mono">{mockPlatformSession.id}</span>입니다.
+        알 수 없는 채널입니다. 현재 mock 채널 ID는 <span className="font-mono">{mockPlatformSession.id}</span>입니다.
       </div>
     );
   }
@@ -499,7 +500,7 @@ export default function SessionLayoutEditorPage() {
             </div>
             <h2 className="mt-2 text-2xl font-black text-slate-950">컴포넌트 방식 화면 구성</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              영상, 자료, 실시간 자막, Q&A, 공지 컴포넌트를 배경 위에 배치하고 세션별 공개 화면을 구성합니다.
+              영상, 자료, 실시간 자막, Q&A, 공지 컴포넌트를 배경 위에 배치하고 채널별 공개 화면을 구성합니다.
               선택한 컴포넌트는 grid 좌표와 드래그로 위치/크기를 조정할 수 있습니다.
             </p>
           </div>
@@ -508,7 +509,7 @@ export default function SessionLayoutEditorPage() {
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">출력 플랫폼 / 레이아웃 선택</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">출력 채널 / 레이아웃 선택</p>
               <h3 className="mt-1 text-sm font-black text-slate-900">
                 {selectedDisplay?.name ?? selectedBaseLayout.name}
               </h3>
@@ -518,7 +519,7 @@ export default function SessionLayoutEditorPage() {
           <form onSubmit={handleAddPlatformLayout} className="mt-4 rounded-xl border border-indigo-100 bg-white p-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_120px_auto]">
               <label className="text-xs font-bold text-slate-700">
-                새 플랫폼 이름
+                새 채널 이름
                 <input
                   value={newDisplayName}
                   onChange={(event) => setNewDisplayName(event.target.value)}
@@ -531,7 +532,7 @@ export default function SessionLayoutEditorPage() {
                 <input
                   value={newDisplayDescription}
                   onChange={(event) => setNewDisplayDescription(event.target.value)}
-                  placeholder="현재 레이아웃을 복제해서 새 플랫폼으로 저장"
+                  placeholder="현재 레이아웃을 복제해서 새 채널로 저장"
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
                 />
               </label>
@@ -552,7 +553,7 @@ export default function SessionLayoutEditorPage() {
                   type="submit"
                   className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
                 >
-                  플랫폼 추가
+                  채널 추가
                 </button>
               </div>
             </div>
@@ -583,7 +584,7 @@ export default function SessionLayoutEditorPage() {
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           {[
-            { label: "행사/세션 생성", icon: Clapperboard },
+            { label: "행사/채널 생성", icon: Clapperboard },
             { label: "화면 템플릿 선택", icon: Image },
             { label: "컴포넌트 배치", icon: Grid3X3 },
             { label: "실시간 송출 시작", icon: Radio }
@@ -677,7 +678,7 @@ export default function SessionLayoutEditorPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-black text-slate-900">한눈에 보는 흐름</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-5">
-            {["행사/세션 생성", "템플릿 선택", "컴포넌트 배치", "저장 및 미리보기", "실시간 송출"].map((item, index) => (
+            {["행사/채널 생성", "템플릿 선택", "컴포넌트 배치", "저장 및 미리보기", "실시간 송출"].map((item, index) => (
               <div key={item} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
                 <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-sm font-black text-indigo-700">
                   {index + 1}
@@ -691,7 +692,7 @@ export default function SessionLayoutEditorPage() {
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-sm leading-relaxed text-emerald-950 shadow-sm">
           <h3 className="text-sm font-black">실제 운영 예시</h3>
           <p className="mt-2">
-            한 행사에서 여러 세션을 동시에 운영할 때, 세션마다 다른 레이아웃과 자막 스트림을 적용하고
+            한 행사에서 여러 채널을 동시에 운영할 때, 채널마다 다른 레이아웃과 자막 스트림을 적용하고
             각 언어 URL을 독립적으로 송출할 수 있습니다.
           </p>
         </div>

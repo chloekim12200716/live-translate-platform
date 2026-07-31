@@ -34,9 +34,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <Settings className="w-3.5 h-3.5" />
             관리자
           </NavLink>
-          <NavLink to="/admin/sessions" className={navClass}>
+          <NavLink to="/admin/channels" className={navClass}>
             <Grid3X3 className="w-3.5 h-3.5" />
-            세션
+            채널
           </NavLink>
           <NavLink to={`/live/${mockPlatformSession.slug}/en`} className={navClass}>
             <Tv className="w-3.5 h-3.5" />

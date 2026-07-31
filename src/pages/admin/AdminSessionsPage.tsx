@@ -170,26 +170,26 @@ export default function AdminSessionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Sessions</p>
-        <h2 className="text-2xl font-bold text-slate-900">세션 관리</h2>
-        <p className="mt-1 text-sm text-slate-500">{mockPlatformData.event.name}의 기본 세션과 언어별 공개 URL입니다.</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Channels</p>
+        <h2 className="text-2xl font-bold text-slate-900">채널 관리</h2>
+        <p className="mt-1 text-sm text-slate-500">{mockPlatformData.event.name}의 송출 채널과 언어별 공개 URL입니다.</p>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Platform Workspace</p>
-              <h3 className="mt-1 text-lg font-bold text-slate-900">행사 / 세션 / 송출 플랫폼</h3>
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Channel Workspace</p>
+              <h3 className="mt-1 text-lg font-bold text-slate-900">행사 / 송출 채널</h3>
               <p className="mt-1 text-sm text-slate-500">
-                먼저 세션을 확인하고, 테스트할 송출 플랫폼을 선택하면 URL·레이아웃 편집·실시간 번역 테스트가 해당 플랫폼 기준으로 바뀝니다.
+                테스트할 송출 채널을 선택하면 URL·레이아웃 편집·실시간 번역 테스트가 해당 채널 기준으로 바뀝니다.
               </p>
             </div>
             <Link
-              to={selectedDisplay ? `/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}` : `/admin/sessions/${mockPlatformData.session.id}/layout`}
+              to={selectedDisplay ? `/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}` : `/admin/channels/${mockPlatformData.session.id}/layout`}
               className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-indigo-700"
             >
-              선택 플랫폼 레이아웃 편집
+              선택 채널 레이아웃 편집
             </Link>
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function AdminSessionsPage() {
             </div>
 
             <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-bold uppercase text-slate-400">Session</p>
+              <p className="text-[11px] font-bold uppercase text-slate-400">Channel</p>
               <p className="mt-1 text-sm font-bold text-slate-900">{mockPlatformData.session.title}</p>
               <p className="mt-1 text-xs font-semibold text-slate-500">
                 {mockPlatformData.session.speakerName} · {mockPlatformData.session.speakerAffiliation}
@@ -213,7 +213,7 @@ export default function AdminSessionsPage() {
 
             <div className="mt-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Platforms</p>
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Channels</p>
                 <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600">
                   {sessionDisplays.length}
                 </span>
@@ -249,14 +249,14 @@ export default function AdminSessionsPage() {
                 <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Selected Platform</p>
+                      <p className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Selected Channel</p>
                       <h3 className="mt-1 text-xl font-bold text-slate-900">{selectedDisplay.name}</h3>
                       <p className="mt-1 text-sm leading-relaxed text-slate-600">{selectedDisplay.description}</p>
                       <p className="mt-2 font-mono text-[11px] text-indigo-700">{selectedDisplay.layoutId}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}`}
+                        to={`/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}`}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-indigo-700"
                       >
                         레이아웃 편집
@@ -310,7 +310,7 @@ export default function AdminSessionsPage() {
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm font-semibold text-slate-600">
-                이 세션에 연결된 송출 플랫폼이 없습니다. 아래에서 플랫폼을 추가하세요.
+                이 행사에 연결된 송출 채널이 없습니다. 아래에서 채널을 추가하세요.
               </div>
             )}
           </section>
@@ -321,7 +321,7 @@ export default function AdminSessionsPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Transcript Documents</p>
-            <h3 className="text-lg font-bold text-slate-900">세션별 최종 번역 문서</h3>
+            <h3 className="text-lg font-bold text-slate-900">채널별 최종 번역 문서</h3>
             <p className="mt-1 text-sm text-slate-500">
               Live Audio 캡처가 종료될 때 최종 문장 단위 번역을 서버 문서로 저장합니다.
             </p>
@@ -369,7 +369,7 @@ export default function AdminSessionsPage() {
             <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Viewer Verification</p>
             <h3 className="text-lg font-bold text-slate-900">언어별 사용자 화면 확인</h3>
             <p className="mt-1 text-sm text-slate-500">
-              선택한 플랫폼의 레이아웃으로 WebSocket Live Audio 테스트에서 publish된 자막이 실제 사용자 URL에 표시되는지 확인합니다.
+              선택한 채널의 레이아웃으로 WebSocket Live Audio 테스트에서 publish된 자막이 실제 사용자 URL에 표시되는지 확인합니다.
             </p>
           </div>
           <Link
@@ -422,10 +422,10 @@ export default function AdminSessionsPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Output Platforms</p>
-            <h3 className="text-lg font-bold text-slate-900">플랫폼별 레이아웃</h3>
+            <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Output Channels</p>
+            <h3 className="text-lg font-bold text-slate-900">채널별 레이아웃</h3>
             <p className="mt-1 text-sm text-slate-500">
-              같은 세션이라도 메인 송출, PPT 중심, 자막 전용, Q&A 포함 화면을 서로 다른 레이아웃으로 관리합니다.
+              메인 송출, PPT 중심, 자막 전용, Q&A 포함 화면을 서로 다른 채널과 레이아웃으로 관리합니다.
             </p>
           </div>
         </div>
@@ -433,7 +433,7 @@ export default function AdminSessionsPage() {
         <form onSubmit={handleAddPlatformDisplay} className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_minmax(220px,1.3fr)_180px_140px_auto]">
             <label className="text-xs font-bold text-slate-700">
-              플랫폼 이름
+              채널 이름
               <input
                 value={newDisplayName}
                 onChange={(event) => setNewDisplayName(event.target.value)}
@@ -479,7 +479,7 @@ export default function AdminSessionsPage() {
                 type="submit"
                 className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
               >
-                플랫폼 추가
+                채널 추가
               </button>
             </div>
           </div>
@@ -503,7 +503,7 @@ export default function AdminSessionsPage() {
                   <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-500">{display.description}</p>
                 </div>
                 <Link
-                  to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
+                  to={`/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
                   className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-black text-white shadow-sm hover:bg-indigo-700"
                 >
                   편집
@@ -523,7 +523,7 @@ export default function AdminSessionsPage() {
                   {isSelected ? "테스트 중" : "테스트 선택"}
                 </button>
                 <Link
-                  to={`/admin/sessions/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
+                  to={`/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
                   className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-indigo-700 hover:bg-indigo-50"
                 >
                   전체 편집 화면
@@ -634,7 +634,7 @@ export default function AdminSessionsPage() {
         </div>
 
         <div className="mt-4 rounded-xl border border-cyan-100 bg-cyan-50 p-4 text-xs leading-relaxed text-cyan-900">
-          현재 구현: `/live/:sessionSlug/:languageCode` 우측 상단 `View Transcript`, 우하단 `Show/Hide Header`, 실시간 demo stream Start/Stop.
+          현재 구현: `/live/:channelSlug/:languageCode` 우측 상단 `View Transcript`, 우하단 `Show/Hide Header`, 실시간 demo stream Start/Stop.
           다음 단계에서 이 설정들을 DB 저장 가능한 player preset으로 분리할 수 있습니다.
         </div>
       </div>

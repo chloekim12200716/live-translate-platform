@@ -20,10 +20,10 @@ export default function AdminPage({
           <h2 className="text-2xl font-bold text-slate-900">관리자 콘솔</h2>
         </div>
         <Link
-          to="/admin/sessions"
+          to="/admin/channels"
           className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
         >
-          세션 관리로 이동
+          채널 관리로 이동
         </Link>
       </div>
 

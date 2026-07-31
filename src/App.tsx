@@ -17,7 +17,7 @@ import { AppState, DictionaryItem } from "./types";
 function RoutedApp(appData: AppDataContext) {
   return (
     <Routes>
-      <Route path="/live/:sessionSlug/:languageCode" element={<LiveSessionPage />} />
+      <Route path="/live/:channelSlug/:languageCode" element={<LiveSessionPage />} />
       <Route
         path="/*"
         element={
@@ -26,7 +26,9 @@ function RoutedApp(appData: AppDataContext) {
               <Route path="/" element={<DemoPage {...appData} />} />
               <Route path="/demo" element={<DemoPage {...appData} />} />
               <Route path="/admin" element={<AdminPage {...appData} />} />
-              <Route path="/admin/sessions" element={<AdminSessionsPage />} />
+              <Route path="/admin/channels" element={<AdminSessionsPage />} />
+              <Route path="/admin/channels/:channelId/layout" element={<SessionLayoutEditorPage />} />
+              <Route path="/admin/sessions" element={<Navigate to="/admin/channels" replace />} />
               <Route path="/admin/sessions/:sessionId/layout" element={<SessionLayoutEditorPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

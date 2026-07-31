@@ -8,7 +8,7 @@ export default function NoticeComponent() {
       <div className="min-w-0">
         <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Notice</p>
         <p className="truncate text-sm font-semibold">
-          Session interpretation is provided as real-time AI captions for demonstration.
+          Channel interpretation is provided as real-time AI captions for demonstration.
         </p>
       </div>
     </div>
