@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink, Radio, ScreenShare, Send, Square } from "lucide-react";
 
 interface LiveAudioTranslationTesterProps {
-  sessionSlug: string;
+  channelSlug: string;
+  sessionSlug?: string;
   layoutId?: string;
   displayName?: string;
   defaultTargetLanguageCode?: string;
@@ -60,10 +61,11 @@ function getAudioSampleRate(mimeType: string | undefined, fallbackSampleRate: nu
   return matchedRate ? Number(matchedRate) : fallbackSampleRate ?? 24000;
 }
 
-function createLiveAudioWebSocketUrl(sessionSlug: string, targetLanguageCode: string, translationMode: "realtime" | "sentence") {
+function createLiveAudioWebSocketUrl(channelSlug: string, targetLanguageCode: string, translationMode: "realtime" | "sentence") {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     sourceLang: "auto",
     targetLang: targetLanguageCode,
     mode: translationMode,
@@ -73,17 +75,17 @@ function createLiveAudioWebSocketUrl(sessionSlug: string, targetLanguageCode: st
   return `${protocol}//${window.location.host}/api/audio/live?${params.toString()}`;
 }
 
-function createCaptionOverlayPath(sessionSlug: string, targetLanguageCode: string, layoutId: string) {
+function createCaptionOverlayPath(channelSlug: string, targetLanguageCode: string, layoutId: string) {
   const params = new URLSearchParams({
     layoutId,
     overlay: "caption"
   });
 
-  return `/live/${sessionSlug}/${targetLanguageCode}?${params.toString()}`;
+  return `/live/${channelSlug}/${targetLanguageCode}?${params.toString()}`;
 }
 
 export default function LiveAudioTranslationTester({
-  sessionSlug,
+  channelSlug,
   layoutId = "layout-default-live-stage",
   displayName = "선택된 플랫폼",
   defaultTargetLanguageCode = "ko"
@@ -98,7 +100,7 @@ export default function LiveAudioTranslationTester({
   const [receivedAudioChunks, setReceivedAudioChunks] = useState(0);
   const [isInterpretationAudioEnabled, setIsInterpretationAudioEnabled] = useState(false);
   const [diagnosticEvents, setDiagnosticEvents] = useState<string[]>([]);
-  const captionOverlayPath = createCaptionOverlayPath(sessionSlug, targetLanguageCode, layoutId);
+  const captionOverlayPath = createCaptionOverlayPath(channelSlug, targetLanguageCode, layoutId);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -184,7 +186,8 @@ export default function LiveAudioTranslationTester({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionSlug,
+          channelSlug,
+          sessionSlug: channelSlug,
           sourceLang: "en",
           speaker: "Sample Test",
           text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk.",
@@ -230,7 +233,7 @@ export default function LiveAudioTranslationTester({
       }
       pushDiagnosticEvent(`audio track selected: ${audioTracks[0]?.label || "unknown"}`);
 
-      const socket = new WebSocket(createLiveAudioWebSocketUrl(sessionSlug, targetLanguageCode, translationMode));
+      const socket = new WebSocket(createLiveAudioWebSocketUrl(channelSlug, targetLanguageCode, translationMode));
       socket.binaryType = "arraybuffer";
       socket.onopen = () => {
         setStatusMessage("Live API WebSocket 연결 중");

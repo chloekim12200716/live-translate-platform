@@ -570,6 +570,18 @@ function getCaptionSessionKey(sessionSlug: string | undefined) {
   return (sessionSlug || "main-keynote").toLowerCase();
 }
 
+function getStringValue(value: unknown, fallback: string) {
+  return typeof value === "string" ? value : fallback;
+}
+
+function getCaptionChannelSlugFromQuery(query: Record<string, unknown>, fallback = "main-keynote") {
+  return getStringValue(query.channelSlug, getStringValue(query.sessionSlug, fallback));
+}
+
+function getCaptionChannelSlugFromBody(body: Record<string, unknown>, fallback = "main-keynote") {
+  return getStringValue(body.channelSlug, getStringValue(body.sessionSlug, fallback));
+}
+
 function getSafeFilePart(value: string) {
   return value.replace(/[^a-z0-9가-힣_-]+/gi, "-").replace(/^-+|-+$/g, "") || "session";
 }
@@ -644,7 +656,7 @@ async function saveLiveTranscriptDocument(document: LiveTranscriptDocument) {
   const body = [
     `# Live Translation Transcript`,
     "",
-    `- Session: ${document.sessionSlug}`,
+    `- Channel: ${document.sessionSlug}`,
     `- Target language: ${document.targetLang}`,
     `- Started at: ${document.startedAt}`,
     `- Ended at: ${document.endedAt}`,
@@ -810,6 +822,7 @@ function getDemoCaptionProducerStatus(sessionSlug: string | undefined) {
   const producer = demoCaptionProducers.get(sessionKey);
 
   return {
+    channelSlug: sessionKey,
     sessionSlug: sessionKey,
     isRunning: Boolean(producer),
     sourceLang: producer?.sourceLang ?? "en",
@@ -1026,8 +1039,8 @@ app.post("/api/translate", async (req, res) => {
 });
 
 app.post("/api/audio/transcribe-publish", express.raw({ type: "*/*", limit: "15mb" }), async (req, res) => {
+  const sessionSlug = getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>);
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  const sessionSlug = getQueryValue(req.query.sessionSlug, "main-keynote");
   const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
   const mimeType = req.headers["content-type"]?.split(";")[0] || "audio/webm";
   const audioBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body ?? []);
@@ -1120,13 +1133,14 @@ app.delete("/api/translation-errors", (_req, res) => {
 
 app.get("/api/captions/queue", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
+  const sessionSlug = getCaptionSessionKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const limit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.limit, "20")) || 20));
   const captions = liveCaptionQueue
     .filter((segment) => segment.sessionSlug === sessionSlug)
     .slice(-limit);
 
   res.json({
+    channelSlug: sessionSlug,
     sessionSlug,
     count: captions.length,
     captions
@@ -1135,21 +1149,26 @@ app.get("/api/captions/queue", (req, res) => {
 
 app.get("/api/captions/transcripts", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
+  const sessionSlug = getCaptionSessionKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const limit = Math.min(50, Math.max(1, Number(getQueryValue(req.query.limit, "10")) || 10));
   const documents = liveTranscriptDocuments
     .filter((document) => document.sessionSlug === sessionSlug)
     .slice(0, limit);
 
   res.json({
+    channelSlug: sessionSlug,
     sessionSlug,
     count: documents.length,
-    documents
+    documents: documents.map((document) => ({
+      ...document,
+      channelSlug: document.sessionSlug
+    }))
   });
 });
 
 app.post("/api/captions/publish", (req, res) => {
   const {
+    channelSlug,
     sessionSlug,
     timestamp,
     speaker,
@@ -1163,7 +1182,7 @@ app.post("/api/captions/publish", (req, res) => {
   }
 
   const segment = createLiveCaptionSegment({
-    sessionSlug,
+    sessionSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
     timestamp,
     speaker,
     text,
@@ -1183,12 +1202,12 @@ app.post("/api/captions/publish", (req, res) => {
 });
 
 app.get("/api/captions/demo/status", (req, res) => {
-  const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
-  res.json(getDemoCaptionProducerStatus(getQueryValue(req.query.sessionSlug, "main-keynote")));
+  res.json(getDemoCaptionProducerStatus(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>)));
 });
 
 app.post("/api/captions/demo/start", (req, res) => {
   const {
+    channelSlug,
     sessionSlug,
     sourceLang,
     intervalMs
@@ -1197,7 +1216,7 @@ app.post("/api/captions/demo/start", (req, res) => {
   res.json({
     status: "started",
     producer: startDemoCaptionProducer({
-      sessionSlug,
+      sessionSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
       sourceLang,
       intervalMs: Number(intervalMs) || 3500
     })
@@ -1205,8 +1224,8 @@ app.post("/api/captions/demo/start", (req, res) => {
 });
 
 app.post("/api/captions/demo/stop", (req, res) => {
-  const { sessionSlug } = req.body;
-  const sessionKey = getCaptionSessionKey(sessionSlug);
+  const { channelSlug, sessionSlug } = req.body;
+  const sessionKey = getCaptionSessionKey(getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }));
   const stopped = stopDemoCaptionProducer(sessionKey);
 
   res.json({
@@ -1219,7 +1238,7 @@ app.get("/api/captions/stream", (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
   const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
   const targetLang = getQueryValue(req.query.targetLang, "ko").toLowerCase();
-  const sessionSlug = getCaptionSessionKey(getQueryValue(req.query.sessionSlug, "main-keynote"));
+  const sessionSlug = getCaptionSessionKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const replayLatest = getQueryValue(req.query.replayLatest, "true") !== "false";
   const replayLimit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.replayLimit, "50")) || 50));
   const subscriberId = `subscriber-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1256,6 +1275,7 @@ app.get("/api/captions/stream", (req, res) => {
 
   writeEvent("stream-ready", {
     subscriberId,
+    channelSlug: sessionSlug,
     sessionSlug,
     sourceLang,
     targetLang,
@@ -1790,7 +1810,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
   audioLiveWss.on("connection", (socket, request) => {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
-    const sessionSlug = getCaptionSessionKey(requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
+    const sessionSlug = getCaptionSessionKey(requestUrl.searchParams.get("channelSlug") ?? requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
     const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "auto").toLowerCase();
     const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
     const translationMode: LiveTranslationMode = requestUrl.searchParams.get("mode") === "realtime" ? "realtime" : "sentence";

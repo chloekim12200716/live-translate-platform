@@ -2,7 +2,8 @@ import React, { useRef, useState } from "react";
 import { Mic, Radio, Square } from "lucide-react";
 
 interface LiveSpeechCaptionTesterProps {
-  sessionSlug: string;
+  channelSlug: string;
+  sessionSlug?: string;
   defaultSourceLanguageCode: string;
 }
 
@@ -63,7 +64,7 @@ function getSpeechLanguage(sourceLanguageCode: string) {
 }
 
 export default function LiveSpeechCaptionTester({
-  sessionSlug,
+  channelSlug,
   defaultSourceLanguageCode
 }: LiveSpeechCaptionTesterProps) {
   const [sourceLanguageCode, setSourceLanguageCode] = useState(defaultSourceLanguageCode);
@@ -82,7 +83,8 @@ export default function LiveSpeechCaptionTester({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sessionSlug,
+        channelSlug,
+        sessionSlug: channelSlug,
         speaker: "Live STT",
         sourceLang: sourceLanguageCode,
         text: trimmedText,

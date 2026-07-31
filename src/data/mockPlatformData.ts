@@ -18,7 +18,7 @@ export interface PlatformSlide {
   endsAtSeconds: number | null;
 }
 
-export interface PlatformSession {
+export interface PlatformChannel {
   id: string;
   eventId: string;
   title: string;
@@ -31,6 +31,8 @@ export interface PlatformSession {
   mode: "live" | "vod";
   slides: PlatformSlide[];
 }
+
+export type PlatformSession = PlatformChannel;
 
 export interface PlatformCaptionStyle {
   fontSizePx: number;
@@ -64,7 +66,8 @@ export interface PlatformLayoutComponent {
 export interface PlatformLayout {
   id: string;
   eventId: string;
-  sessionId: string;
+  channelId: string;
+  sessionId?: string;
   name: string;
   columns: number;
   rows: number;
@@ -80,7 +83,8 @@ export interface PlatformLayout {
 
 export interface PlatformDisplayTarget {
   id: string;
-  sessionId: string;
+  channelId: string;
+  sessionId?: string;
   name: string;
   description: string;
   layoutId: string;
@@ -90,7 +94,8 @@ export interface PlatformDisplayTarget {
 export interface PlatformDisplayUrl {
   displayId: string;
   layoutId: string;
-  sessionSlug: string;
+  channelSlug: string;
+  sessionSlug?: string;
   languageCode: string;
   label: string;
   path: string;
@@ -105,7 +110,7 @@ export const mockPlatformEvent: PlatformEvent = {
   backgroundImageUrl: "https://ai.google.dev/static/site-assets/images/share-ais-513315318.png"
 };
 
-export const mockPlatformSession: PlatformSession = {
+export const mockPlatformChannel: PlatformChannel = {
   id: "main-keynote",
   eventId: mockPlatformEvent.id,
   title: "Dual-Targeting Therapy for Cardiometabolic Diseases",
@@ -156,10 +161,13 @@ export const mockPlatformSession: PlatformSession = {
   ]
 };
 
+export const mockPlatformSession = mockPlatformChannel;
+
 export const mockPlatformLayout: PlatformLayout = {
   id: "layout-default-live-stage",
   eventId: mockPlatformEvent.id,
-  sessionId: mockPlatformSession.id,
+  channelId: mockPlatformChannel.id,
+  sessionId: mockPlatformChannel.id,
   name: "Default Live Translation Stage",
   columns: 24,
   rows: 14,
@@ -218,7 +226,8 @@ export const mockPlatformLayouts: PlatformLayout[] = [
 export const mockPlatformDisplays: PlatformDisplayTarget[] = [
   {
     id: "main-stage",
-    sessionId: mockPlatformSession.id,
+    channelId: mockPlatformChannel.id,
+    sessionId: mockPlatformChannel.id,
     name: "강연 메인 송출",
     description: "영상, 슬라이드, 자막, Q&A를 함께 보여주는 기본 행사 화면",
     layoutId: "layout-default-live-stage",
@@ -226,7 +235,8 @@ export const mockPlatformDisplays: PlatformDisplayTarget[] = [
   },
   {
     id: "presentation-stage",
-    sessionId: mockPlatformSession.id,
+    channelId: mockPlatformChannel.id,
+    sessionId: mockPlatformChannel.id,
     name: "PPT 중심 송출",
     description: "발표 자료를 크게 보여주고 영상과 자막을 보조로 배치",
     layoutId: "layout-presentation-focus",
@@ -234,7 +244,8 @@ export const mockPlatformDisplays: PlatformDisplayTarget[] = [
   },
   {
     id: "caption-stage",
-    sessionId: mockPlatformSession.id,
+    channelId: mockPlatformChannel.id,
+    sessionId: mockPlatformChannel.id,
     name: "자막 전용 송출",
     description: "현장 스크린이나 접근성 화면을 위한 큰 자막 중심 화면",
     layoutId: "layout-caption-only",
@@ -242,7 +253,8 @@ export const mockPlatformDisplays: PlatformDisplayTarget[] = [
   },
   {
     id: "qa-stage",
-    sessionId: mockPlatformSession.id,
+    channelId: mockPlatformChannel.id,
+    sessionId: mockPlatformChannel.id,
     name: "Q&A 포함 송출",
     description: "청중 질문 영역을 강조하는 상호작용형 화면",
     layoutId: "layout-qa-focus",
@@ -252,18 +264,19 @@ export const mockPlatformDisplays: PlatformDisplayTarget[] = [
 
 export const mockDisplayUrls: PlatformDisplayUrl[] = [
   ...mockPlatformDisplays.flatMap((display) => [
-    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "ar", label: `${display.name} · Arabic`, path: `/live/${mockPlatformSession.slug}/ar?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "zh", label: `${display.name} · Chinese`, path: `/live/${mockPlatformSession.slug}/zh?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "en", label: `${display.name} · English`, path: `/live/${mockPlatformSession.slug}/en?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "fr", label: `${display.name} · French`, path: `/live/${mockPlatformSession.slug}/fr?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "ru", label: `${display.name} · Russian`, path: `/live/${mockPlatformSession.slug}/ru?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, sessionSlug: mockPlatformSession.slug, languageCode: "es", label: `${display.name} · Spanish`, path: `/live/${mockPlatformSession.slug}/es?layoutId=${display.layoutId}` }
+    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, sessionSlug: mockPlatformChannel.slug, languageCode: "ar", label: `${display.name} · Arabic`, path: `/live/${mockPlatformChannel.slug}/ar?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, sessionSlug: mockPlatformChannel.slug, languageCode: "zh", label: `${display.name} · Chinese`, path: `/live/${mockPlatformChannel.slug}/zh?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, sessionSlug: mockPlatformChannel.slug, languageCode: "en", label: `${display.name} · English`, path: `/live/${mockPlatformChannel.slug}/en?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, sessionSlug: mockPlatformChannel.slug, languageCode: "fr", label: `${display.name} · French`, path: `/live/${mockPlatformChannel.slug}/fr?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, sessionSlug: mockPlatformChannel.slug, languageCode: "ru", label: `${display.name} · Russian`, path: `/live/${mockPlatformChannel.slug}/ru?layoutId=${display.layoutId}` },
+    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, sessionSlug: mockPlatformChannel.slug, languageCode: "es", label: `${display.name} · Spanish`, path: `/live/${mockPlatformChannel.slug}/es?layoutId=${display.layoutId}` }
   ])
 ];
 
 export const mockPlatformData = {
   event: mockPlatformEvent,
-  session: mockPlatformSession,
+  channel: mockPlatformChannel,
+  session: mockPlatformChannel,
   layout: mockPlatformLayout,
   layouts: mockPlatformLayouts,
   displays: mockPlatformDisplays,

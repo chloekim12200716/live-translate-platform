@@ -3,13 +3,13 @@ import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import DisplayRenderer from "../../components/platform/DisplayRenderer";
 import {
   mockPlatformData,
+  mockPlatformChannel,
   mockPlatformLayout,
-  mockPlatformLayouts,
-  mockPlatformSession
+  mockPlatformLayouts
 } from "../../data/mockPlatformData";
 import { loadStoredLayout, loadStoredLayoutById } from "../../data/platformLayoutStorage";
 
-export default function LiveSessionPage() {
+export default function LiveChannelPage() {
   const { channelSlug, sessionSlug, languageCode } = useParams();
   const resolvedChannelSlug = channelSlug ?? sessionSlug;
   const [searchParams] = useSearchParams();
@@ -19,18 +19,18 @@ export default function LiveSessionPage() {
   const transparentBackground = overlayMode === "caption"
     || ["1", "true", "yes"].includes((searchParams.get("transparent") ?? "").toLowerCase());
   const fallbackLayout = mockPlatformLayouts.find((layout) => layout.id === requestedLayoutId)
-    ?? loadStoredLayoutById(mockPlatformSession.slug, requestedLayoutId)
+    ?? loadStoredLayoutById(mockPlatformChannel.slug, requestedLayoutId)
     ?? mockPlatformLayout;
-  const layout = loadStoredLayout(mockPlatformSession.slug, fallbackLayout, fallbackLayout.id);
+  const layout = loadStoredLayout(mockPlatformChannel.slug, fallbackLayout, fallbackLayout.id);
 
-  if (resolvedChannelSlug !== mockPlatformSession.slug) {
-    return <Navigate to={`/live/${mockPlatformSession.slug}/${resolvedLanguage}`} replace />;
+  if (resolvedChannelSlug !== mockPlatformChannel.slug) {
+    return <Navigate to={`/live/${mockPlatformChannel.slug}/${resolvedLanguage}`} replace />;
   }
 
   return (
     <DisplayRenderer
       layout={layout}
-      session={mockPlatformSession}
+      channel={mockPlatformChannel}
       languageCode={resolvedLanguage}
       overlayMode={overlayMode}
       transparentBackground={transparentBackground}

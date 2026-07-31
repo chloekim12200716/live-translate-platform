@@ -5,7 +5,7 @@ import AdminCMS from "../../components/AdminCMS";
 import QAPanel from "../../components/QAPanel";
 import TranscriptSidebar from "../../components/TranscriptSidebar";
 import VideoPlayer from "../../components/VideoPlayer";
-import { mockPlatformSession } from "../../data/mockPlatformData";
+import { mockPlatformChannel } from "../../data/mockPlatformData";
 import { AppDataContext } from "../../types/appContext";
 
 export default function DemoPage({
@@ -31,7 +31,7 @@ export default function DemoPage({
         <div className="space-y-1">
           <h3 className="font-bold">심포지엄 통합 듀얼 데모 안내</h3>
           <p className="text-indigo-900/90 leading-relaxed">
-            기존 AI Studio 데모를 유지한 화면입니다. 운영 플랫폼용 공개 시청자 화면은 <Link className="font-bold text-indigo-700 underline" to={`/live/${mockPlatformSession.slug}/en`}>/live/{mockPlatformSession.slug}/en</Link> 경로에서 확인할 수 있습니다.
+            기존 AI Studio 데모를 유지한 화면입니다. 운영 플랫폼용 공개 시청자 화면은 <Link className="font-bold text-indigo-700 underline" to={`/live/${mockPlatformChannel.slug}/en`}>/live/{mockPlatformChannel.slug}/en</Link> 경로에서 확인할 수 있습니다.
           </p>
         </div>
       </div>

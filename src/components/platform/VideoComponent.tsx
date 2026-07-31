@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { PlayCircle } from "lucide-react";
-import { PlatformSession } from "../../data/mockPlatformData";
+import { PlatformChannel } from "../../data/mockPlatformData";
 import {
   loadStoredVideoBlob,
   loadStoredVideoMetadata
 } from "../../data/platformVideoStorage";
 
 interface VideoComponentProps {
-  session: PlatformSession;
+  channel: PlatformChannel;
 }
 
 function getYouTubeEmbedUrl(url: string) {
@@ -46,8 +46,8 @@ function getYouTubeEmbedUrl(url: string) {
   }
 }
 
-export default function VideoComponent({ session }: VideoComponentProps) {
-  const [videoSrc, setVideoSrc] = useState(session.videoUrl);
+export default function VideoComponent({ channel }: VideoComponentProps) {
+  const [videoSrc, setVideoSrc] = useState(channel.videoUrl);
   const [videoLabel, setVideoLabel] = useState("Sample video");
   const [videoErrorMessage, setVideoErrorMessage] = useState("");
   const youtubeEmbedUrl = getYouTubeEmbedUrl(videoSrc);
@@ -57,11 +57,11 @@ export default function VideoComponent({ session }: VideoComponentProps) {
     let isActive = true;
 
     const loadVideoSource = async () => {
-      const metadata = loadStoredVideoMetadata(session.slug);
+      const metadata = loadStoredVideoMetadata(channel.slug);
 
       if (!metadata) {
         if (!isActive) return;
-        setVideoSrc(session.videoUrl);
+        setVideoSrc(channel.videoUrl);
         setVideoLabel("Sample video");
         setVideoErrorMessage("");
         return;
@@ -76,7 +76,7 @@ export default function VideoComponent({ session }: VideoComponentProps) {
       }
 
       if (metadata.sourceType === "file") {
-        const blob = await loadStoredVideoBlob(session.slug);
+        const blob = await loadStoredVideoBlob(channel.slug);
         if (!isActive) return;
 
         if (blob) {
@@ -88,14 +88,15 @@ export default function VideoComponent({ session }: VideoComponentProps) {
         }
       }
 
-      setVideoSrc(session.videoUrl);
+      setVideoSrc(channel.videoUrl);
       setVideoLabel("Sample video");
       setVideoErrorMessage("");
     };
 
     const handleVideoSourceUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ sessionSlug?: string }>).detail;
-      if (detail?.sessionSlug && detail.sessionSlug !== session.slug) return;
+      const detail = (event as CustomEvent<{ channelSlug?: string; sessionSlug?: string }>).detail;
+      const updatedChannelSlug = detail?.channelSlug ?? detail?.sessionSlug;
+      if (updatedChannelSlug && updatedChannelSlug !== channel.slug) return;
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
         objectUrl = "";
@@ -104,8 +105,8 @@ export default function VideoComponent({ session }: VideoComponentProps) {
     };
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== `videoSource:${session.slug}`) return;
-      handleVideoSourceUpdated(new CustomEvent("platform-video-source-updated", { detail: { sessionSlug: session.slug } }));
+      if (event.key !== `videoSource:${channel.slug}`) return;
+      handleVideoSourceUpdated(new CustomEvent("platform-video-source-updated", { detail: { channelSlug: channel.slug, sessionSlug: channel.slug } }));
     };
 
     void loadVideoSource();
@@ -118,7 +119,7 @@ export default function VideoComponent({ session }: VideoComponentProps) {
       window.removeEventListener("platform-video-source-updated", handleVideoSourceUpdated);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [session.slug, session.videoUrl]);
+  }, [channel.slug, channel.videoUrl]);
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden rounded-lg border border-white/15 bg-slate-950 shadow-2xl">
@@ -126,7 +127,7 @@ export default function VideoComponent({ session }: VideoComponentProps) {
         <iframe
           key={youtubeEmbedUrl}
           src={youtubeEmbedUrl}
-          title={`${session.title} YouTube test video`}
+          title={`${channel.title} YouTube test video`}
           className="h-full w-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
@@ -150,14 +151,14 @@ export default function VideoComponent({ session }: VideoComponentProps) {
       )}
       <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-1.5 text-white backdrop-blur">
         <span className="h-2 w-2 rounded-full bg-rose-500" />
-        <span className="text-xs font-semibold uppercase tracking-wide">{session.mode}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide">{channel.mode}</span>
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3 flex max-w-[80%] items-center gap-2 rounded-md bg-slate-950/75 px-3 py-2 text-white backdrop-blur">
         <PlayCircle className="h-4 w-4 text-cyan-300" />
         <div className="truncate text-left">
-          <p className="truncate text-xs font-bold">{session.speakerName}</p>
+          <p className="truncate text-xs font-bold">{channel.speakerName}</p>
           <p className="truncate text-[11px] text-slate-300">
-            {youtubeEmbedUrl ? "YouTube" : videoLabel} · {session.speakerAffiliation}
+            {youtubeEmbedUrl ? "YouTube" : videoLabel} · {channel.speakerAffiliation}
           </p>
         </div>
       </div>

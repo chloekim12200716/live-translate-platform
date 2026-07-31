@@ -13,7 +13,7 @@ import {
   mockPlatformLayout,
   mockPlatformLayouts,
   mockPlatformDisplays,
-  mockPlatformSession,
+  mockPlatformChannel,
   PlatformComponentType,
   PlatformDisplayTarget,
   PlatformLayout,
@@ -49,22 +49,22 @@ function toSlug(value: string) {
     .replace(/^-+|-+$/g, "") || "platform";
 }
 
-export default function SessionLayoutEditorPage() {
+export default function ChannelLayoutEditorPage() {
   const { channelId, sessionId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const resolvedChannelId = channelId ?? sessionId;
-  const isKnownChannel = resolvedChannelId === mockPlatformSession.id;
-  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformSession.slug));
+  const isKnownChannel = resolvedChannelId === mockPlatformChannel.id;
+  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformChannel.slug));
   const selectedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
   const customLayouts = customDisplays
-    .map((display) => loadStoredLayoutById(mockPlatformSession.slug, display.layoutId))
+    .map((display) => loadStoredLayoutById(mockPlatformChannel.slug, display.layoutId))
     .filter((customLayout): customLayout is PlatformLayout => Boolean(customLayout));
   const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
   const allBaseLayouts = [...mockPlatformLayouts, ...customLayouts];
   const selectedBaseLayout = allBaseLayouts.find((layout) => layout.id === selectedLayoutId) ?? mockPlatformLayout;
   const selectedDisplay = allPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
-  const previewLanguageCode = selectedDisplay?.defaultLanguageCode ?? mockPlatformSession.sourceLanguageCode;
-  const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id));
+  const previewLanguageCode = selectedDisplay?.defaultLanguageCode ?? mockPlatformChannel.sourceLanguageCode;
+  const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformChannel.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isBackgroundDragActive, setIsBackgroundDragActive] = useState(false);
@@ -97,7 +97,7 @@ export default function SessionLayoutEditorPage() {
   const selectedComponent = layout.components.find((component) => component.id === selectedComponentId) ?? layout.components[0];
 
   useEffect(() => {
-    const nextLayout = loadStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id);
+    const nextLayout = loadStoredLayout(mockPlatformChannel.slug, selectedBaseLayout, selectedBaseLayout.id);
     setLayout(nextLayout);
     setSelectedComponentId(nextLayout.components[0]?.id ?? "");
     setSavedAt(null);
@@ -120,11 +120,14 @@ export default function SessionLayoutEditorPage() {
       ...layout,
       id: layoutId,
       name,
+      channelId: mockPlatformChannel.id,
+      sessionId: mockPlatformChannel.id,
       components: layout.components.map((component) => ({ ...component }))
     };
     const nextDisplay: PlatformDisplayTarget = {
       id: displayId,
-      sessionId: mockPlatformSession.id,
+      channelId: mockPlatformChannel.id,
+      sessionId: mockPlatformChannel.id,
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,
@@ -132,8 +135,8 @@ export default function SessionLayoutEditorPage() {
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
-    saveStoredLayout(mockPlatformSession.slug, nextLayout, layoutId);
-    saveStoredPlatformDisplays(mockPlatformSession.slug, nextDisplays);
+    saveStoredLayout(mockPlatformChannel.slug, nextLayout, layoutId);
+    saveStoredPlatformDisplays(mockPlatformChannel.slug, nextDisplays);
     setCustomDisplays(nextDisplays);
     setNewDisplayName("");
     setNewDisplayDescription("");
@@ -335,16 +338,16 @@ export default function SessionLayoutEditorPage() {
   };
 
   const handleSaveLayout = () => {
-    saveStoredLayout(mockPlatformSession.slug, layout, selectedBaseLayout.id);
+    saveStoredLayout(mockPlatformChannel.slug, layout, selectedBaseLayout.id);
     setSavedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
   };
 
   const handleResetLayout = () => {
     const isMockLayout = mockPlatformLayouts.some((baseLayout) => baseLayout.id === selectedBaseLayout.id);
     if (isMockLayout) {
-      clearStoredLayout(mockPlatformSession.slug, selectedBaseLayout.id);
+      clearStoredLayout(mockPlatformChannel.slug, selectedBaseLayout.id);
     } else {
-      saveStoredLayout(mockPlatformSession.slug, selectedBaseLayout, selectedBaseLayout.id);
+      saveStoredLayout(mockPlatformChannel.slug, selectedBaseLayout, selectedBaseLayout.id);
     }
 
     setLayout(selectedBaseLayout);
@@ -435,7 +438,7 @@ export default function SessionLayoutEditorPage() {
   if (!isKnownChannel) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-        알 수 없는 채널입니다. 현재 mock 채널 ID는 <span className="font-mono">{mockPlatformSession.id}</span>입니다.
+        알 수 없는 채널입니다. 현재 mock 채널 ID는 <span className="font-mono">{mockPlatformChannel.id}</span>입니다.
       </div>
     );
   }
@@ -474,14 +477,14 @@ export default function SessionLayoutEditorPage() {
               저장
             </button>
             <Link
-              to={`/live/${mockPlatformSession.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}`}
+              to={`/live/${mockPlatformChannel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-slate-950 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-slate-800 sm:flex-none"
             >
               저장 후 미리보기
             </Link>
             <Link
-              to={`/live/${mockPlatformSession.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&overlay=caption`}
+              to={`/live/${mockPlatformChannel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&overlay=caption`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-emerald-700 sm:flex-none"
             >

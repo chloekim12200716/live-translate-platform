@@ -17,7 +17,8 @@ const captionByLanguage: Record<string, string> = {
 
 interface CaptionComponentProps {
   languageCode: string;
-  sessionSlug: string;
+  channelSlug: string;
+  sessionSlug?: string;
   sourceLanguageCode: string;
   sourceText: string;
   style?: PlatformCaptionStyle;
@@ -77,7 +78,7 @@ function getCaptionDisplayText({
 
 export default function CaptionComponent({
   languageCode,
-  sessionSlug,
+  channelSlug,
   sourceLanguageCode,
   sourceText,
   style,
@@ -182,7 +183,8 @@ export default function CaptionComponent({
     }
 
     const streamParams = new URLSearchParams({
-      sessionSlug,
+      channelSlug,
+      sessionSlug: channelSlug,
       sourceLang: normalizedSourceLanguage,
       targetLang: normalizedLanguage,
       replayLatest: "true",
@@ -270,7 +272,7 @@ export default function CaptionComponent({
         eventSource.close();
       }
     };
-  }, [fallbackCaption, normalizedLanguage, normalizedSourceLanguage, sessionSlug, shouldUseMockFallback, sourceText]);
+  }, [channelSlug, fallbackCaption, normalizedLanguage, normalizedSourceLanguage, shouldUseMockFallback, sourceText]);
 
   const visibleCaptionLines = draftCaptionLine
     ? [draftCaptionLine]

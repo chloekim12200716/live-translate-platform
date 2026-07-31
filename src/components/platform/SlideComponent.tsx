@@ -1,13 +1,13 @@
 import React from "react";
 import { FileText } from "lucide-react";
-import { PlatformSession } from "../../data/mockPlatformData";
+import { PlatformChannel } from "../../data/mockPlatformData";
 
 interface SlideComponentProps {
-  session: PlatformSession;
+  channel: PlatformChannel;
 }
 
-export default function SlideComponent({ session }: SlideComponentProps) {
-  const slide = session.slides[0];
+export default function SlideComponent({ channel }: SlideComponentProps) {
+  const slide = channel.slides[0];
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-lg border border-white/15 bg-slate-950/90 p-5 text-left text-white shadow-2xl backdrop-blur">
@@ -36,8 +36,8 @@ export default function SlideComponent({ session }: SlideComponentProps) {
       </div>
 
       <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[11px] text-slate-400">
-        <span>{session.title}</span>
-        <span className="font-mono">1 / {session.slides.length}</span>
+        <span>{channel.title}</span>
+        <span className="font-mono">1 / {channel.slides.length}</span>
       </div>
     </div>
   );

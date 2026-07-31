@@ -44,7 +44,8 @@ interface TranslationErrorLog {
 
 interface TranscriptDocumentSummary {
   id: string;
-  sessionSlug: string;
+  channelSlug?: string;
+  sessionSlug?: string;
   targetLang: string;
   startedAt: string;
   endedAt?: string;
@@ -60,19 +61,20 @@ function toSlug(value: string) {
     .replace(/^-+|-+$/g, "") || "platform";
 }
 
-function buildDisplayUrls(display: PlatformDisplayTarget, sessionSlug: string): PlatformDisplayUrl[] {
+function buildDisplayUrls(display: PlatformDisplayTarget, channelSlug: string): PlatformDisplayUrl[] {
   return supportedLanguages.map((languageCode) => ({
     displayId: display.id,
     layoutId: display.layoutId,
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     languageCode,
     label: `${display.name} · ${languageCode.toUpperCase()}`,
-    path: `/live/${sessionSlug}/${languageCode}?layoutId=${display.layoutId}`
+    path: `/live/${channelSlug}/${languageCode}?layoutId=${display.layoutId}`
   }));
 }
 
-export default function AdminSessionsPage() {
-  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformData.session.slug));
+export default function AdminChannelsPage() {
+  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformData.channel.slug));
   const [selectedDisplayId, setSelectedDisplayId] = useState(mockPlatformDisplays[0]?.id ?? "");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newDisplayDescription, setNewDisplayDescription] = useState("");
@@ -81,15 +83,15 @@ export default function AdminSessionsPage() {
   const [translationErrors, setTranslationErrors] = useState<TranslationErrorLog[]>([]);
   const [transcriptDocuments, setTranscriptDocuments] = useState<TranscriptDocumentSummary[]>([]);
   const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
-  const sessionDisplays = allPlatformDisplays.filter((display) => display.sessionId === mockPlatformData.session.id);
-  const selectedDisplay = sessionDisplays.find((display) => display.id === selectedDisplayId) ?? sessionDisplays[0];
-  const selectedDisplayUrls = selectedDisplay ? buildDisplayUrls(selectedDisplay, mockPlatformData.session.slug) : [];
+  const channelDisplays = allPlatformDisplays.filter((display) => display.channelId === mockPlatformData.channel.id);
+  const selectedDisplay = channelDisplays.find((display) => display.id === selectedDisplayId) ?? channelDisplays[0];
+  const selectedDisplayUrls = selectedDisplay ? buildDisplayUrls(selectedDisplay, mockPlatformData.channel.slug) : [];
   const selectedPreviewPath = selectedDisplay
-    ? `/live/${mockPlatformData.session.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}`
-    : `/live/${mockPlatformData.session.slug}/en`;
+    ? `/live/${mockPlatformData.channel.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}`
+    : `/live/${mockPlatformData.channel.slug}/en`;
   const selectedOverlayPath = selectedDisplay
-    ? `/live/${mockPlatformData.session.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}&overlay=caption`
-    : `/live/${mockPlatformData.session.slug}/en?overlay=caption`;
+    ? `/live/${mockPlatformData.channel.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}&overlay=caption`
+    : `/live/${mockPlatformData.channel.slug}/en?overlay=caption`;
 
   const handleAddPlatformDisplay = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -105,11 +107,14 @@ export default function AdminSessionsPage() {
       ...templateLayout,
       id: layoutId,
       name,
+      channelId: mockPlatformData.channel.id,
+      sessionId: mockPlatformData.channel.id,
       components: templateLayout.components.map((component) => ({ ...component }))
     };
     const nextDisplay: PlatformDisplayTarget = {
       id: displayId,
-      sessionId: mockPlatformData.session.id,
+      channelId: mockPlatformData.channel.id,
+      sessionId: mockPlatformData.channel.id,
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,
@@ -117,8 +122,8 @@ export default function AdminSessionsPage() {
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
-    saveStoredLayout(mockPlatformData.session.slug, nextLayout, layoutId);
-    saveStoredPlatformDisplays(mockPlatformData.session.slug, nextDisplays);
+    saveStoredLayout(mockPlatformData.channel.slug, nextLayout, layoutId);
+    saveStoredPlatformDisplays(mockPlatformData.channel.slug, nextDisplays);
     setCustomDisplays(nextDisplays);
     setSelectedDisplayId(nextDisplay.id);
     setNewDisplayName("");
@@ -128,8 +133,8 @@ export default function AdminSessionsPage() {
   };
 
   const handleDeletePlatformDisplay = (displayId: string) => {
-    deleteStoredPlatformDisplay(mockPlatformData.session.slug, displayId);
-    const nextDisplays = loadStoredPlatformDisplays(mockPlatformData.session.slug);
+    deleteStoredPlatformDisplay(mockPlatformData.channel.slug, displayId);
+    const nextDisplays = loadStoredPlatformDisplays(mockPlatformData.channel.slug);
     setCustomDisplays(nextDisplays);
     if (selectedDisplayId === displayId) {
       setSelectedDisplayId(mockPlatformDisplays[0]?.id ?? nextDisplays[0]?.id ?? "");
@@ -144,7 +149,7 @@ export default function AdminSessionsPage() {
   };
 
   const loadTranscriptDocuments = () => {
-    fetch(`/api/captions/transcripts?sessionSlug=${encodeURIComponent(mockPlatformData.session.slug)}&limit=5`)
+    fetch(`/api/captions/transcripts?channelSlug=${encodeURIComponent(mockPlatformData.channel.slug)}&limit=5`)
       .then((response) => response.json())
       .then((data: { documents?: TranscriptDocumentSummary[] }) => setTranscriptDocuments(data.documents ?? []))
       .catch(() => setTranscriptDocuments([]));
@@ -186,7 +191,7 @@ export default function AdminSessionsPage() {
               </p>
             </div>
             <Link
-              to={selectedDisplay ? `/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}` : `/admin/channels/${mockPlatformData.session.id}/layout`}
+              to={selectedDisplay ? `/admin/channels/${mockPlatformData.channel.id}/layout?layoutId=${selectedDisplay.layoutId}` : `/admin/channels/${mockPlatformData.channel.id}/layout`}
               className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-indigo-700"
             >
               선택 채널 레이아웃 편집
@@ -204,22 +209,22 @@ export default function AdminSessionsPage() {
 
             <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-[11px] font-bold uppercase text-slate-400">Channel</p>
-              <p className="mt-1 text-sm font-bold text-slate-900">{mockPlatformData.session.title}</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{mockPlatformData.channel.title}</p>
               <p className="mt-1 text-xs font-semibold text-slate-500">
-                {mockPlatformData.session.speakerName} · {mockPlatformData.session.speakerAffiliation}
+                {mockPlatformData.channel.speakerName} · {mockPlatformData.channel.speakerAffiliation}
               </p>
-              <p className="mt-2 font-mono text-[11px] text-indigo-600">{mockPlatformData.session.slug}</p>
+              <p className="mt-2 font-mono text-[11px] text-indigo-600">{mockPlatformData.channel.slug}</p>
             </div>
 
             <div className="mt-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Channels</p>
                 <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600">
-                  {sessionDisplays.length}
+                  {channelDisplays.length}
                 </span>
               </div>
               <div className="mt-2 space-y-2">
-                {sessionDisplays.map((display) => {
+                {channelDisplays.map((display) => {
                   const isSelected = selectedDisplay?.id === display.id;
 
                   return (
@@ -256,7 +261,7 @@ export default function AdminSessionsPage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        to={`/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${selectedDisplay.layoutId}`}
+                        to={`/admin/channels/${mockPlatformData.channel.id}/layout?layoutId=${selectedDisplay.layoutId}`}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-indigo-700"
                       >
                         레이아웃 편집
@@ -302,7 +307,7 @@ export default function AdminSessionsPage() {
                 </div>
 
                 <LiveAudioTranslationTester
-                  sessionSlug={mockPlatformData.session.slug}
+                  channelSlug={mockPlatformData.channel.slug}
                   layoutId={selectedDisplay.layoutId}
                   displayName={selectedDisplay.name}
                   defaultTargetLanguageCode={selectedDisplay.defaultLanguageCode}
@@ -345,7 +350,7 @@ export default function AdminSessionsPage() {
               <article key={document.id} className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-black text-emerald-900">
-                    {document.sessionSlug} · {document.targetLang.toUpperCase()} · {document.entries.length} sentences
+                    {document.channelSlug ?? document.sessionSlug} · {document.targetLang.toUpperCase()} · {document.entries.length} sentences
                   </p>
                   <time className="text-[11px] font-bold text-emerald-700">
                     {new Date(document.endedAt ?? document.startedAt).toLocaleString("ko-KR")}
@@ -386,8 +391,8 @@ export default function AdminSessionsPage() {
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           {livePreviewLanguages.map((language) => {
             const livePath = selectedDisplay
-              ? `/live/${mockPlatformData.session.slug}/${language.code}?layoutId=${selectedDisplay.layoutId}`
-              : `/live/${mockPlatformData.session.slug}/${language.code}`;
+              ? `/live/${mockPlatformData.channel.slug}/${language.code}?layoutId=${selectedDisplay.layoutId}`
+              : `/live/${mockPlatformData.channel.slug}/${language.code}`;
 
             return (
               <article key={language.code} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -503,7 +508,7 @@ export default function AdminSessionsPage() {
                   <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-500">{display.description}</p>
                 </div>
                 <Link
-                  to={`/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
+                  to={`/admin/channels/${mockPlatformData.channel.id}/layout?layoutId=${display.layoutId}`}
                   className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-black text-white shadow-sm hover:bg-indigo-700"
                 >
                   편집
@@ -523,13 +528,13 @@ export default function AdminSessionsPage() {
                   {isSelected ? "테스트 중" : "테스트 선택"}
                 </button>
                 <Link
-                  to={`/admin/channels/${mockPlatformData.session.id}/layout?layoutId=${display.layoutId}`}
+                  to={`/admin/channels/${mockPlatformData.channel.id}/layout?layoutId=${display.layoutId}`}
                   className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-indigo-700 hover:bg-indigo-50"
                 >
                   전체 편집 화면
                 </Link>
                 <Link
-                  to={`/live/${mockPlatformData.session.slug}/${display.defaultLanguageCode}?layoutId=${display.layoutId}`}
+                  to={`/live/${mockPlatformData.channel.slug}/${display.defaultLanguageCode}?layoutId=${display.layoutId}`}
                   className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-slate-700 hover:bg-slate-100"
                 >
                   미리보기

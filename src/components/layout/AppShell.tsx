@@ -1,7 +1,7 @@
 import React, { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { BrainCircuit, Grid3X3, Layers, Settings, Tv } from "lucide-react";
-import { mockPlatformSession } from "../../data/mockPlatformData";
+import { mockPlatformChannel } from "../../data/mockPlatformData";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
@@ -38,7 +38,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <Grid3X3 className="w-3.5 h-3.5" />
             채널
           </NavLink>
-          <NavLink to={`/live/${mockPlatformSession.slug}/en`} className={navClass}>
+          <NavLink to={`/live/${mockPlatformChannel.slug}/en`} className={navClass}>
             <Tv className="w-3.5 h-3.5" />
             Live
           </NavLink>

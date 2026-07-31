@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Eye, EyeOff, FileText, X } from "lucide-react";
 import {
+  PlatformChannel,
   PlatformLayout,
-  PlatformLayoutComponent,
-  PlatformSession
+  PlatformLayoutComponent
 } from "../../data/mockPlatformData";
 import {
   getBackgroundSize,
@@ -18,7 +18,7 @@ import VideoComponent from "./VideoComponent";
 
 interface DisplayRendererProps {
   layout: PlatformLayout;
-  session: PlatformSession;
+  channel: PlatformChannel;
   languageCode: string;
   overlayMode?: "none" | "caption";
   transparentBackground?: boolean;
@@ -44,29 +44,29 @@ function getTranscriptComparisonKey(text: string) {
 
 function renderComponent({
   component,
-  session,
+  channel,
   languageCode,
   isOverlay,
   transparentBackground
 }: {
   component: PlatformLayoutComponent;
-  session: PlatformSession;
+  channel: PlatformChannel;
   languageCode: string;
   isOverlay: boolean;
   transparentBackground: boolean;
 }) {
   switch (component.type) {
     case "video":
-      return <VideoComponent session={session} />;
+      return <VideoComponent channel={channel} />;
     case "slide":
-      return <SlideComponent session={session} />;
+      return <SlideComponent channel={channel} />;
     case "caption":
       return (
         <CaptionComponent
           languageCode={languageCode}
-          sessionSlug={session.slug}
-          sourceLanguageCode={session.sourceLanguageCode}
-          sourceText={session.sampleCaptionText}
+          channelSlug={channel.slug}
+          sourceLanguageCode={channel.sourceLanguageCode}
+          sourceText={channel.sampleCaptionText}
           style={component.captionStyle}
           isOverlay={isOverlay}
           transparentBackground={transparentBackground}
@@ -83,7 +83,7 @@ function renderComponent({
 
 export default function DisplayRenderer({
   layout,
-  session,
+  channel,
   languageCode,
   overlayMode = "none",
   transparentBackground = false
@@ -138,8 +138,8 @@ export default function DisplayRenderer({
       {isHeaderVisible && !isCaptionOverlay && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-white">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{session.mode} Channel</p>
-            <h1 className="text-xl font-bold md:text-2xl">{session.title}</h1>
+            <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">{channel.mode} Channel</p>
+            <h1 className="text-xl font-bold md:text-2xl">{channel.title}</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -151,11 +151,11 @@ export default function DisplayRenderer({
               View Transcript
             </button>
             <CaptionStreamDemoControls
-              sessionSlug={session.slug}
-              sourceLanguageCode={session.sourceLanguageCode}
+              channelSlug={channel.slug}
+              sourceLanguageCode={channel.sourceLanguageCode}
             />
             <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide backdrop-blur">
-              /live/{session.slug}/{languageCode}
+              /live/{channel.slug}/{languageCode}
             </div>
           </div>
         </div>
@@ -190,7 +190,7 @@ export default function DisplayRenderer({
             >
               {renderComponent({
                 component,
-                session,
+                channel,
                 languageCode,
                 isOverlay: isCaptionOverlay,
                 transparentBackground: transparentBackground || isCaptionOverlay
@@ -216,7 +216,7 @@ export default function DisplayRenderer({
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-cyan-200">Transcript</p>
-              <h2 className="text-lg font-bold">{session.title}</h2>
+              <h2 className="text-lg font-bold">{channel.title}</h2>
             </div>
             <button
               type="button"

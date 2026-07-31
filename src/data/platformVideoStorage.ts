@@ -1,7 +1,8 @@
 export type PlatformVideoSourceType = "default" | "url" | "file";
 
 export interface PlatformVideoSourceMetadata {
-  sessionSlug: string;
+  channelSlug: string;
+  sessionSlug?: string;
   sourceType: PlatformVideoSourceType;
   url?: string;
   fileName?: string;
@@ -13,13 +14,13 @@ export interface PlatformVideoSourceMetadata {
 const dbName = "platform-video-assets";
 const storeName = "videos";
 
-export function getPlatformVideoSourceStorageKey(sessionSlug: string) {
-  return `videoSource:${sessionSlug}`;
+export function getPlatformVideoSourceStorageKey(channelSlug: string) {
+  return `videoSource:${channelSlug}`;
 }
 
-function emitVideoSourceUpdated(sessionSlug: string) {
+function emitVideoSourceUpdated(channelSlug: string) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("platform-video-source-updated", { detail: { sessionSlug } }));
+  window.dispatchEvent(new CustomEvent("platform-video-source-updated", { detail: { channelSlug, sessionSlug: channelSlug } }));
 }
 
 function openVideoDb(): Promise<IDBDatabase> {
@@ -37,12 +38,12 @@ function openVideoDb(): Promise<IDBDatabase> {
   });
 }
 
-async function putVideoBlob(sessionSlug: string, file: File) {
+async function putVideoBlob(channelSlug: string, file: File) {
   const db = await openVideoDb();
 
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(storeName, "readwrite");
-    transaction.objectStore(storeName).put(file, sessionSlug);
+    transaction.objectStore(storeName).put(file, channelSlug);
     transaction.oncomplete = () => {
       db.close();
       resolve();
@@ -54,14 +55,14 @@ async function putVideoBlob(sessionSlug: string, file: File) {
   });
 }
 
-async function deleteVideoBlob(sessionSlug: string) {
+async function deleteVideoBlob(channelSlug: string) {
   if (typeof indexedDB === "undefined") return;
 
   const db = await openVideoDb();
 
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(storeName, "readwrite");
-    transaction.objectStore(storeName).delete(sessionSlug);
+    transaction.objectStore(storeName).delete(channelSlug);
     transaction.oncomplete = () => {
       db.close();
       resolve();
@@ -73,14 +74,14 @@ async function deleteVideoBlob(sessionSlug: string) {
   });
 }
 
-export async function loadStoredVideoBlob(sessionSlug: string): Promise<Blob | null> {
+export async function loadStoredVideoBlob(channelSlug: string): Promise<Blob | null> {
   if (typeof indexedDB === "undefined") return null;
 
   const db = await openVideoDb();
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, "readonly");
-    const request = transaction.objectStore(storeName).get(sessionSlug);
+    const request = transaction.objectStore(storeName).get(channelSlug);
     request.onsuccess = () => {
       db.close();
       resolve((request.result as Blob | undefined) ?? null);
@@ -92,42 +93,49 @@ export async function loadStoredVideoBlob(sessionSlug: string): Promise<Blob | n
   });
 }
 
-export function loadStoredVideoMetadata(sessionSlug: string): PlatformVideoSourceMetadata | null {
+export function loadStoredVideoMetadata(channelSlug: string): PlatformVideoSourceMetadata | null {
   if (typeof window === "undefined") return null;
 
-  const rawMetadata = window.localStorage.getItem(getPlatformVideoSourceStorageKey(sessionSlug));
+  const rawMetadata = window.localStorage.getItem(getPlatformVideoSourceStorageKey(channelSlug));
   if (!rawMetadata) return null;
 
   try {
-    return JSON.parse(rawMetadata) as PlatformVideoSourceMetadata;
+    const metadata = JSON.parse(rawMetadata) as PlatformVideoSourceMetadata;
+    return {
+      ...metadata,
+      channelSlug: metadata.channelSlug ?? metadata.sessionSlug ?? channelSlug,
+      sessionSlug: metadata.sessionSlug ?? metadata.channelSlug ?? channelSlug
+    };
   } catch (error) {
     console.error("Failed to parse video source metadata:", error);
     return null;
   }
 }
 
-export async function saveStoredVideoUrl(sessionSlug: string, url: string) {
+export async function saveStoredVideoUrl(channelSlug: string, url: string) {
   const metadata: PlatformVideoSourceMetadata = {
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     sourceType: "url",
     url,
     updatedAt: new Date().toISOString()
   };
 
   try {
-    await deleteVideoBlob(sessionSlug);
+    await deleteVideoBlob(channelSlug);
   } catch (error) {
     console.warn("Failed to clear stored video file before saving URL:", error);
   }
 
-  window.localStorage.setItem(getPlatformVideoSourceStorageKey(sessionSlug), JSON.stringify(metadata));
-  emitVideoSourceUpdated(sessionSlug);
+  window.localStorage.setItem(getPlatformVideoSourceStorageKey(channelSlug), JSON.stringify(metadata));
+  emitVideoSourceUpdated(channelSlug);
   return metadata;
 }
 
-export async function saveStoredVideoFile(sessionSlug: string, file: File) {
+export async function saveStoredVideoFile(channelSlug: string, file: File) {
   const metadata: PlatformVideoSourceMetadata = {
-    sessionSlug,
+    channelSlug,
+    sessionSlug: channelSlug,
     sourceType: "file",
     fileName: file.name,
     fileType: file.type,
@@ -135,19 +143,19 @@ export async function saveStoredVideoFile(sessionSlug: string, file: File) {
     updatedAt: new Date().toISOString()
   };
 
-  await putVideoBlob(sessionSlug, file);
-  window.localStorage.setItem(getPlatformVideoSourceStorageKey(sessionSlug), JSON.stringify(metadata));
-  emitVideoSourceUpdated(sessionSlug);
+  await putVideoBlob(channelSlug, file);
+  window.localStorage.setItem(getPlatformVideoSourceStorageKey(channelSlug), JSON.stringify(metadata));
+  emitVideoSourceUpdated(channelSlug);
   return metadata;
 }
 
-export async function clearStoredVideoSource(sessionSlug: string) {
+export async function clearStoredVideoSource(channelSlug: string) {
   try {
-    await deleteVideoBlob(sessionSlug);
+    await deleteVideoBlob(channelSlug);
   } catch (error) {
     console.warn("Failed to clear stored video file:", error);
   }
 
-  window.localStorage.removeItem(getPlatformVideoSourceStorageKey(sessionSlug));
-  emitVideoSourceUpdated(sessionSlug);
+  window.localStorage.removeItem(getPlatformVideoSourceStorageKey(channelSlug));
+  emitVideoSourceUpdated(channelSlug);
 }

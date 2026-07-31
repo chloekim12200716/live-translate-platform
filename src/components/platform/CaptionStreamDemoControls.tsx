@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Play, Radio, Square } from "lucide-react";
 
 interface CaptionStreamDemoControlsProps {
-  sessionSlug: string;
+  channelSlug: string;
   sourceLanguageCode: string;
 }
 
@@ -13,12 +13,12 @@ interface DemoProducerStatus {
   intervalMs: number | null;
 }
 
-export default function CaptionStreamDemoControls({ sessionSlug, sourceLanguageCode }: CaptionStreamDemoControlsProps) {
+export default function CaptionStreamDemoControls({ channelSlug, sourceLanguageCode }: CaptionStreamDemoControlsProps) {
   const [status, setStatus] = useState<DemoProducerStatus | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   const loadStatus = () => {
-    fetch(`/api/captions/demo/status?sessionSlug=${encodeURIComponent(sessionSlug)}`)
+    fetch(`/api/captions/demo/status?channelSlug=${encodeURIComponent(channelSlug)}`)
       .then((response) => response.json())
       .then((data: DemoProducerStatus) => setStatus(data))
       .catch(() => setStatus(null));
@@ -28,7 +28,7 @@ export default function CaptionStreamDemoControls({ sessionSlug, sourceLanguageC
     loadStatus();
     const timer = window.setInterval(loadStatus, 4000);
     return () => window.clearInterval(timer);
-  }, [sessionSlug]);
+  }, [channelSlug]);
 
   const updateDemoStream = (action: "start" | "stop") => {
     setIsBusy(true);
@@ -36,7 +36,8 @@ export default function CaptionStreamDemoControls({ sessionSlug, sourceLanguageC
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sessionSlug,
+        channelSlug,
+        sessionSlug: channelSlug,
         sourceLang: sourceLanguageCode,
         intervalMs: 3500
       })

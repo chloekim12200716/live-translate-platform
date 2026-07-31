@@ -7,17 +7,17 @@ import {
 } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import AdminPage from "./pages/admin/AdminPage";
-import AdminSessionsPage from "./pages/admin/AdminSessionsPage";
-import SessionLayoutEditorPage from "./pages/admin/SessionLayoutEditorPage";
+import AdminChannelsPage from "./pages/admin/AdminChannelsPage";
+import ChannelLayoutEditorPage from "./pages/admin/ChannelLayoutEditorPage";
 import DemoPage from "./pages/demo/DemoPage";
-import LiveSessionPage from "./pages/live/LiveSessionPage";
+import LiveChannelPage from "./pages/live/LiveChannelPage";
 import { AppDataContext } from "./types/appContext";
 import { AppState, DictionaryItem } from "./types";
 
 function RoutedApp(appData: AppDataContext) {
   return (
     <Routes>
-      <Route path="/live/:channelSlug/:languageCode" element={<LiveSessionPage />} />
+      <Route path="/live/:channelSlug/:languageCode" element={<LiveChannelPage />} />
       <Route
         path="/*"
         element={
@@ -26,10 +26,10 @@ function RoutedApp(appData: AppDataContext) {
               <Route path="/" element={<DemoPage {...appData} />} />
               <Route path="/demo" element={<DemoPage {...appData} />} />
               <Route path="/admin" element={<AdminPage {...appData} />} />
-              <Route path="/admin/channels" element={<AdminSessionsPage />} />
-              <Route path="/admin/channels/:channelId/layout" element={<SessionLayoutEditorPage />} />
+              <Route path="/admin/channels" element={<AdminChannelsPage />} />
+              <Route path="/admin/channels/:channelId/layout" element={<ChannelLayoutEditorPage />} />
               <Route path="/admin/sessions" element={<Navigate to="/admin/channels" replace />} />
-              <Route path="/admin/sessions/:sessionId/layout" element={<SessionLayoutEditorPage />} />
+              <Route path="/admin/sessions/:sessionId/layout" element={<ChannelLayoutEditorPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AppShell>

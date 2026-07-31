@@ -6,21 +6,23 @@ import {
 
 const legacyDefaultLayoutId = "layout-default-live-stage";
 
-export function getLayoutStorageKey(sessionSlug: string) {
-  return `layout:${sessionSlug}`;
+export function getLayoutStorageKey(channelSlug: string) {
+  return `layout:${channelSlug}`;
 }
 
-export function getPlatformLayoutStorageKey(sessionSlug: string, layoutId: string) {
-  return `layout:${sessionSlug}:${layoutId}`;
+export function getPlatformLayoutStorageKey(channelSlug: string, layoutId: string) {
+  return `layout:${channelSlug}:${layoutId}`;
 }
 
-export function getPlatformDisplaysStorageKey(sessionSlug: string) {
-  return `platformDisplays:${sessionSlug}`;
+export function getPlatformDisplaysStorageKey(channelSlug: string) {
+  return `platformDisplays:${channelSlug}`;
 }
 
 function normalizeLayout(layout: PlatformLayout): PlatformLayout {
   return {
     ...layout,
+    channelId: layout.channelId ?? layout.sessionId ?? "",
+    sessionId: layout.sessionId ?? layout.channelId,
     canvasWidth: layout.canvasWidth ?? 1920,
     canvasHeight: layout.canvasHeight ?? 1080,
     backgroundFit: layout.backgroundFit ?? "cover",
@@ -37,11 +39,11 @@ function normalizeLayout(layout: PlatformLayout): PlatformLayout {
   };
 }
 
-export function loadStoredLayout(sessionSlug: string, fallbackLayout: PlatformLayout, layoutId = fallbackLayout.id): PlatformLayout {
+export function loadStoredLayout(channelSlug: string, fallbackLayout: PlatformLayout, layoutId = fallbackLayout.id): PlatformLayout {
   if (typeof window === "undefined") return fallbackLayout;
 
-  const rawPlatformLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(sessionSlug, layoutId));
-  const rawLegacyLayout = layoutId === legacyDefaultLayoutId ? window.localStorage.getItem(getLayoutStorageKey(sessionSlug)) : null;
+  const rawPlatformLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
+  const rawLegacyLayout = layoutId === legacyDefaultLayoutId ? window.localStorage.getItem(getLayoutStorageKey(channelSlug)) : null;
   const rawLayout = rawPlatformLayout ?? rawLegacyLayout;
   if (!rawLayout) return normalizeLayout(fallbackLayout);
 
@@ -53,10 +55,10 @@ export function loadStoredLayout(sessionSlug: string, fallbackLayout: PlatformLa
   }
 }
 
-export function loadStoredLayoutById(sessionSlug: string, layoutId: string): PlatformLayout | null {
+export function loadStoredLayoutById(channelSlug: string, layoutId: string): PlatformLayout | null {
   if (typeof window === "undefined") return null;
 
-  const rawLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(sessionSlug, layoutId));
+  const rawLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
   if (!rawLayout) return null;
 
   try {
@@ -67,45 +69,55 @@ export function loadStoredLayoutById(sessionSlug: string, layoutId: string): Pla
   }
 }
 
-export function saveStoredLayout(sessionSlug: string, layout: PlatformLayout, layoutId = layout.id) {
-  window.localStorage.setItem(getPlatformLayoutStorageKey(sessionSlug, layoutId), JSON.stringify(normalizeLayout(layout)));
+export function saveStoredLayout(channelSlug: string, layout: PlatformLayout, layoutId = layout.id) {
+  window.localStorage.setItem(getPlatformLayoutStorageKey(channelSlug, layoutId), JSON.stringify(normalizeLayout(layout)));
 }
 
-export function clearStoredLayout(sessionSlug: string, layoutId?: string) {
+export function clearStoredLayout(channelSlug: string, layoutId?: string) {
   if (layoutId) {
-    window.localStorage.removeItem(getPlatformLayoutStorageKey(sessionSlug, layoutId));
+    window.localStorage.removeItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
     return;
   }
 
-  window.localStorage.removeItem(getLayoutStorageKey(sessionSlug));
+  window.localStorage.removeItem(getLayoutStorageKey(channelSlug));
 }
 
-export function loadStoredPlatformDisplays(sessionSlug: string): PlatformDisplayTarget[] {
+function normalizeDisplay(display: PlatformDisplayTarget): PlatformDisplayTarget {
+  return {
+    ...display,
+    channelId: display.channelId ?? display.sessionId ?? "",
+    sessionId: display.sessionId ?? display.channelId
+  };
+}
+
+export function loadStoredPlatformDisplays(channelSlug: string): PlatformDisplayTarget[] {
   if (typeof window === "undefined") return [];
 
-  const rawDisplays = window.localStorage.getItem(getPlatformDisplaysStorageKey(sessionSlug));
+  const rawDisplays = window.localStorage.getItem(getPlatformDisplaysStorageKey(channelSlug));
   if (!rawDisplays) return [];
 
   try {
     const parsedDisplays = JSON.parse(rawDisplays) as PlatformDisplayTarget[];
-    return parsedDisplays.filter((display) => display.sessionId && display.layoutId && display.name);
+    return parsedDisplays
+      .map(normalizeDisplay)
+      .filter((display) => display.channelId && display.layoutId && display.name);
   } catch (error) {
     console.error("Failed to parse stored platform displays:", error);
     return [];
   }
 }
 
-export function saveStoredPlatformDisplays(sessionSlug: string, displays: PlatformDisplayTarget[]) {
-  window.localStorage.setItem(getPlatformDisplaysStorageKey(sessionSlug), JSON.stringify(displays));
+export function saveStoredPlatformDisplays(channelSlug: string, displays: PlatformDisplayTarget[]) {
+  window.localStorage.setItem(getPlatformDisplaysStorageKey(channelSlug), JSON.stringify(displays.map(normalizeDisplay)));
 }
 
-export function deleteStoredPlatformDisplay(sessionSlug: string, displayId: string) {
-  const displays = loadStoredPlatformDisplays(sessionSlug);
+export function deleteStoredPlatformDisplay(channelSlug: string, displayId: string) {
+  const displays = loadStoredPlatformDisplays(channelSlug);
   const displayToDelete = displays.find((display) => display.id === displayId);
   const nextDisplays = displays.filter((display) => display.id !== displayId);
-  saveStoredPlatformDisplays(sessionSlug, nextDisplays);
+  saveStoredPlatformDisplays(channelSlug, nextDisplays);
 
   if (displayToDelete) {
-    clearStoredLayout(sessionSlug, displayToDelete.layoutId);
+    clearStoredLayout(channelSlug, displayToDelete.layoutId);
   }
 }
