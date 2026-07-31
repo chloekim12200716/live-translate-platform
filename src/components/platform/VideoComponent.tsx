@@ -158,7 +158,7 @@ export default function VideoComponent({ channel }: VideoComponentProps) {
         <div className="truncate text-left">
           <p className="truncate text-xs font-bold">{channel.speakerName}</p>
           <p className="truncate text-[11px] text-slate-300">
-            {youtubeEmbedUrl ? "YouTube" : videoLabel} · {channel.speakerAffiliation}
+            {[youtubeEmbedUrl ? "YouTube" : videoLabel, channel.notes].filter(Boolean).join(" · ")}
           </p>
         </div>
       </div>

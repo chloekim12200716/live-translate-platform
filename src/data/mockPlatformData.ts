@@ -24,7 +24,7 @@ export interface PlatformChannel {
   title: string;
   slug: string;
   speakerName: string;
-  speakerAffiliation: string;
+  notes: string;
   sourceLanguageCode: string;
   videoUrl: string;
   sampleCaptionText: string;
@@ -111,7 +111,7 @@ export const mockPlatformChannel: PlatformChannel = {
   title: "실시간 의학행사 채널",
   slug: "main-keynote",
   speakerName: "Dr. Robert C.",
-  speakerAffiliation: "Cleveland Clinic",
+  notes: "의학 학술행사 기본 테스트 채널",
   sourceLanguageCode: "en",
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   sampleCaptionText: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
@@ -162,7 +162,7 @@ export const mockEpidemiologyChannel: PlatformChannel = {
   title: "실시간 역학회 채널",
   slug: "epidemiology-live",
   speakerName: "Dr. Amelia Park",
-  speakerAffiliation: "Global Epidemiology Society",
+  notes: "역학회 발표 및 감염병 감시 지표 테스트",
   sourceLanguageCode: "en",
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
   sampleCaptionText: "We will review outbreak surveillance indicators and population-level risk signals.",
@@ -201,7 +201,7 @@ export const mockPressBriefingChannel: PlatformChannel = {
   title: "실시간 기자간담회 채널",
   slug: "press-briefing-live",
   speakerName: "Press Office",
-  speakerAffiliation: "Medical Affairs",
+  notes: "기자간담회 발표 및 Q&A 테스트",
   sourceLanguageCode: "ko",
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
   sampleCaptionText: "오늘 기자간담회에서는 신약 허가 일정과 임상 데이터 공개 계획을 설명드리겠습니다.",

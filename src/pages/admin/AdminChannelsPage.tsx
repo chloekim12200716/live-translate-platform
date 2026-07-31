@@ -131,7 +131,7 @@ export default function AdminChannelsPage() {
   const [newChannelTitle, setNewChannelTitle] = useState("");
   const [newChannelSlug, setNewChannelSlug] = useState("");
   const [newSpeakerName, setNewSpeakerName] = useState("");
-  const [newSpeakerAffiliation, setNewSpeakerAffiliation] = useState("");
+  const [newChannelNotes, setNewChannelNotes] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newDisplayDescription, setNewDisplayDescription] = useState("");
   const [newTemplateLayoutId, setNewTemplateLayoutId] = useState(mockPlatformLayout.id);
@@ -197,7 +197,7 @@ export default function AdminChannelsPage() {
       title,
       slug,
       speakerName: newSpeakerName.trim() || "Speaker",
-      speakerAffiliation: newSpeakerAffiliation.trim() || "TBD",
+      notes: newChannelNotes.trim(),
       sourceLanguageCode: "auto",
       videoUrl: mockPlatformChannel.videoUrl,
       sampleCaptionText: `${title}의 실시간 자막 테스트 문장입니다.`,
@@ -216,7 +216,7 @@ export default function AdminChannelsPage() {
     setNewChannelTitle("");
     setNewChannelSlug("");
     setNewSpeakerName("");
-    setNewSpeakerAffiliation("");
+    setNewChannelNotes("");
   };
 
   const handleDeleteChannel = (channelId: string) => {
@@ -324,8 +324,11 @@ export default function AdminChannelsPage() {
                     >
                       <span className="block text-sm font-black text-slate-900">{channel.title}</span>
                       <span className="mt-1 block text-xs font-semibold text-slate-500">
-                        {channel.speakerName} · {channel.speakerAffiliation}
+                        {channel.speakerName}
                       </span>
+                      {channel.notes && (
+                        <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-slate-500">{channel.notes}</span>
+                      )}
                       <span className="mt-2 block font-mono text-[10px] text-indigo-600">/live/{channel.slug}/ko</span>
                     </button>
                     {isCustom && (
@@ -378,11 +381,11 @@ export default function AdminChannelsPage() {
                 />
               </label>
               <label className="block text-xs font-bold text-slate-700">
-                소속
+                비고
                 <input
-                  value={newSpeakerAffiliation}
-                  onChange={(event) => setNewSpeakerAffiliation(event.target.value)}
-                  placeholder="예: Seoul Medical Center"
+                  value={newChannelNotes}
+                  onChange={(event) => setNewChannelNotes(event.target.value)}
+                  placeholder="예: 2층 A홀, 기자단 전용, 내부 테스트"
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
                 />
               </label>
@@ -404,8 +407,11 @@ export default function AdminChannelsPage() {
                 <p className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Selected Channel</p>
                 <h3 className="mt-1 text-xl font-bold text-slate-900">{selectedChannel.title}</h3>
                 <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  {selectedChannel.speakerName} · {selectedChannel.speakerAffiliation}
+                  {selectedChannel.speakerName}
                 </p>
+                {selectedChannel.notes && (
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{selectedChannel.notes}</p>
+                )}
                 <p className="mt-2 font-mono text-[11px] text-indigo-700">/live/{selectedChannel.slug}/:languageCode</p>
               </div>
               <div className="flex flex-wrap gap-2">
