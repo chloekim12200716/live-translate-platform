@@ -36,7 +36,7 @@ export interface Note {
 }
 
 export interface AppState {
-  sessionMode: string; // "live" | "vod"
+  broadcastMode: string; // "live" | "vod"
   speakerLang: string; // "en" | "ko"
   outputLang: string;  // "ko" | "en" | "both"
   isCapturing: boolean;

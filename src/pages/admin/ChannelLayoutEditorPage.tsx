@@ -50,10 +50,9 @@ function toSlug(value: string) {
 }
 
 export default function ChannelLayoutEditorPage() {
-  const { channelId, sessionId } = useParams();
+  const { channelId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const resolvedChannelId = channelId ?? sessionId;
-  const isKnownChannel = resolvedChannelId === mockPlatformChannel.id;
+  const isKnownChannel = channelId === mockPlatformChannel.id;
   const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformChannel.slug));
   const selectedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
   const customLayouts = customDisplays

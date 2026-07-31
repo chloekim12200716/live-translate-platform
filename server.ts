@@ -575,15 +575,15 @@ function getStringValue(value: unknown, fallback: string) {
 }
 
 function getCaptionChannelSlugFromQuery(query: Record<string, unknown>, fallback = "main-keynote") {
-  return getStringValue(query.channelSlug, getStringValue(query.sessionSlug, fallback));
+  return getStringValue(query.channelSlug, fallback);
 }
 
 function getCaptionChannelSlugFromBody(body: Record<string, unknown>, fallback = "main-keynote") {
-  return getStringValue(body.channelSlug, getStringValue(body.sessionSlug, fallback));
+  return getStringValue(body.channelSlug, fallback);
 }
 
 function getSafeFilePart(value: string) {
-  return value.replace(/[^a-z0-9가-힣_-]+/gi, "-").replace(/^-+|-+$/g, "") || "session";
+  return value.replace(/[^a-z0-9가-힣_-]+/gi, "-").replace(/^-+|-+$/g, "") || "channel";
 }
 
 function removeSpeechFillers(text: string) {
@@ -674,7 +674,6 @@ function createLiveCaptionSegment({
   id,
   sequence,
   channelSlug,
-  sessionSlug,
   timestamp,
   speaker,
   text,
@@ -684,7 +683,6 @@ function createLiveCaptionSegment({
   id?: string;
   sequence?: number;
   channelSlug?: string;
-  sessionSlug?: string;
   timestamp?: number;
   speaker?: string;
   text: string;
@@ -697,7 +695,7 @@ function createLiveCaptionSegment({
 
   return {
     id: id ?? `caption-${Date.now()}-${nextSequence}`,
-    channelSlug: getCaptionChannelKey(channelSlug ?? sessionSlug),
+    channelSlug: getCaptionChannelKey(channelSlug),
     timestamp: Number(timestamp) || 0,
     speaker: speaker || "Speaker",
     text: cleanedText,
@@ -716,7 +714,6 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
     subscriber.writeEvent("caption", {
       id: segment.id,
       channelSlug: segment.channelSlug,
-      sessionSlug: segment.channelSlug,
       timestamp: segment.timestamp,
       speaker: segment.speaker,
       sourceText: segment.text,
@@ -733,7 +730,6 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
   subscriber.writeEvent("caption", {
     id: segment.id,
     channelSlug: segment.channelSlug,
-    sessionSlug: segment.channelSlug,
     timestamp: segment.timestamp,
     speaker: segment.speaker,
     sourceText: segment.text,
@@ -752,7 +748,6 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
       subscriber.writeEvent("caption", {
         id: segment.id,
         channelSlug: segment.channelSlug,
-        sessionSlug: segment.channelSlug,
         timestamp: segment.timestamp,
         speaker: segment.speaker,
         sourceText: segment.text,
@@ -770,18 +765,10 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
       subscriber.writeEvent("caption-error", {
         id: segment.id,
         channelSlug: segment.channelSlug,
-        sessionSlug: segment.channelSlug,
         message: error.message,
         sequence: segment.sequence
       });
     });
-}
-
-function serializeLiveCaptionSegment(segment: LiveCaptionSegment) {
-  return {
-    ...segment,
-    sessionSlug: segment.channelSlug
-  };
 }
 
 function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: boolean } = {}) {
@@ -836,7 +823,6 @@ function getDemoCaptionProducerStatus(channelSlug: string | undefined) {
 
   return {
     channelSlug: channelKey,
-    sessionSlug: channelKey,
     isRunning: Boolean(producer),
     sourceLang: producer?.sourceLang ?? "en",
     intervalMs: producer?.intervalMs ?? null,
@@ -883,7 +869,7 @@ function startDemoCaptionProducer({
 
 // In-Memory Live State
 let appState = {
-  sessionMode: "live", // "live" | "vod"
+  broadcastMode: "live", // "live" | "vod"
   speakerLang: "en",   // "en" | "ko"
   outputLang: "ko",    // "ko" | "en" | "both"
   isCapturing: false,
@@ -1114,7 +1100,7 @@ If there is no clear speech, return an empty string.`;
     res.json({
       status: "published",
       transcript,
-      caption: serializeLiveCaptionSegment(segment),
+      caption: segment,
       engine: `Gemini ${GEMINI_MODEL} Audio`
     });
   } catch (error: unknown) {
@@ -1154,9 +1140,8 @@ app.get("/api/captions/queue", (req, res) => {
 
   res.json({
     channelSlug,
-    sessionSlug: channelSlug,
     count: captions.length,
-    captions: captions.map(serializeLiveCaptionSegment)
+    captions
   });
 });
 
@@ -1170,19 +1155,14 @@ app.get("/api/captions/transcripts", (req, res) => {
 
   res.json({
     channelSlug,
-    sessionSlug: channelSlug,
     count: documents.length,
-    documents: documents.map((document) => ({
-      ...document,
-      sessionSlug: document.channelSlug
-    }))
+    documents
   });
 });
 
 app.post("/api/captions/publish", (req, res) => {
   const {
     channelSlug,
-    sessionSlug,
     timestamp,
     speaker,
     text,
@@ -1195,7 +1175,7 @@ app.post("/api/captions/publish", (req, res) => {
   }
 
   const segment = createLiveCaptionSegment({
-    channelSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
+    channelSlug: getCaptionChannelSlugFromBody({ channelSlug }),
     timestamp,
     speaker,
     text,
@@ -1207,7 +1187,7 @@ app.post("/api/captions/publish", (req, res) => {
 
   res.json({
     status: "queued",
-    caption: serializeLiveCaptionSegment(segment),
+    caption: segment,
     subscribers: Array.from(captionStreamSubscribers.values())
       .filter((subscriber) => subscriber.channelSlug === segment.channelSlug)
       .length
@@ -1221,7 +1201,6 @@ app.get("/api/captions/demo/status", (req, res) => {
 app.post("/api/captions/demo/start", (req, res) => {
   const {
     channelSlug,
-    sessionSlug,
     sourceLang,
     intervalMs
   } = req.body;
@@ -1229,7 +1208,7 @@ app.post("/api/captions/demo/start", (req, res) => {
   res.json({
     status: "started",
     producer: startDemoCaptionProducer({
-      channelSlug: getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }),
+      channelSlug: getCaptionChannelSlugFromBody({ channelSlug }),
       sourceLang,
       intervalMs: Number(intervalMs) || 3500
     })
@@ -1237,8 +1216,8 @@ app.post("/api/captions/demo/start", (req, res) => {
 });
 
 app.post("/api/captions/demo/stop", (req, res) => {
-  const { channelSlug, sessionSlug } = req.body;
-  const channelKey = getCaptionChannelKey(getCaptionChannelSlugFromBody({ channelSlug, sessionSlug }));
+  const { channelSlug } = req.body;
+  const channelKey = getCaptionChannelKey(getCaptionChannelSlugFromBody({ channelSlug }));
   const stopped = stopDemoCaptionProducer(channelKey);
 
   res.json({
@@ -1289,7 +1268,6 @@ app.get("/api/captions/stream", (req, res) => {
   writeEvent("stream-ready", {
     subscriberId,
     channelSlug,
-    sessionSlug: channelSlug,
     sourceLang,
     targetLang,
     queuedCaptions: liveCaptionQueue.filter((segment) => segment.channelSlug === channelSlug).length
@@ -1304,7 +1282,7 @@ app.get("/api/captions/stream", (req, res) => {
   }
 });
 
-interface GeminiLiveSessionLike {
+interface GeminiLiveConnectionLike {
   sendRealtimeInput: (params: {
     audio?: { data: string; mimeType: string };
     audioStreamEnd?: boolean;
@@ -1823,13 +1801,13 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
   audioLiveWss.on("connection", (socket, request) => {
     const requestUrl = new URL(request.url ?? "", `http://${request.headers.host ?? "localhost"}`);
-    const channelSlug = getCaptionChannelKey(requestUrl.searchParams.get("channelSlug") ?? requestUrl.searchParams.get("sessionSlug") ?? "main-keynote");
+    const channelSlug = getCaptionChannelKey(requestUrl.searchParams.get("channelSlug") ?? "main-keynote");
     const sourceLang = (requestUrl.searchParams.get("sourceLang") ?? "auto").toLowerCase();
     const targetLang = (requestUrl.searchParams.get("targetLang") ?? "ko").toLowerCase();
     const translationMode: LiveTranslationMode = requestUrl.searchParams.get("mode") === "realtime" ? "realtime" : "sentence";
     const mimeType = requestUrl.searchParams.get("mimeType") || "audio/webm;codecs=opus";
     const pendingFrames: Buffer[] = [];
-    let liveSession: GeminiLiveSessionLike | null = null;
+    let liveConnection: GeminiLiveConnectionLike | null = null;
     let isClosed = false;
     let audioFrameCount = 0;
     let liveServerMessageCount = 0;
@@ -1852,12 +1830,12 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     });
 
     const flushPendingFrames = () => {
-      if (!liveSession) return;
+      if (!liveConnection) return;
 
       while (pendingFrames.length > 0) {
         const frame = pendingFrames.shift();
         if (!frame) continue;
-        liveSession.sendRealtimeInput({
+        liveConnection.sendRealtimeInput({
           audio: {
             data: frame.toString("base64"),
             mimeType
@@ -1866,7 +1844,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       }
     };
 
-    const connectLiveSession = async () => {
+    const connectLiveConnection = async () => {
       if (!liveAiClient) {
         sendAudioLiveSocketMessage(socket, {
           type: "error",
@@ -1883,7 +1861,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, input=auto, target=${getLiveTranslateTargetLanguageCode(targetLang)}, mode=${translationMode}`
         });
 
-        liveSession = await (liveAiClient as any).live.connect({
+        liveConnection = await (liveAiClient as any).live.connect({
           model: GEMINI_LIVE_MODEL,
           config: {
             responseModalities: ["AUDIO"],
@@ -1919,7 +1897,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
               const message = error instanceof Error ? error.message : String(error);
               recordTranslationError({
                 error,
-                text: "[Gemini Live audio session]",
+                text: "[Gemini Live audio connection]",
                 sourceLang,
                 targetLang: "live-transcription"
               });
@@ -1942,14 +1920,13 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         });
 
         if (isClosed) {
-          liveSession.close();
+          liveConnection.close();
           return;
         }
 
         sendAudioLiveSocketMessage(socket, {
           type: "ready",
           channelSlug,
-          sessionSlug: channelSlug,
           sourceLang,
           targetLang,
           mimeType,
@@ -1972,7 +1949,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       }
     };
 
-    void connectLiveSession();
+    void connectLiveConnection();
 
     socket.on("message", (data, isBinary) => {
       if (!isBinary) {
@@ -1983,7 +1960,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           }
           if (message.type === "end") {
             void liveTranscriptBuffer.flush("client-end");
-            liveSession?.sendRealtimeInput({ audioStreamEnd: true });
+            liveConnection?.sendRealtimeInput({ audioStreamEnd: true });
           }
         } catch {
           sendAudioLiveSocketMessage(socket, {
@@ -2008,7 +1985,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           message: `audio frame received #${audioFrameCount} (${frame.length} bytes)`
         });
       }
-      if (!liveSession) {
+      if (!liveConnection) {
         pendingFrames.push(frame);
         if (pendingFrames.length > 80) {
           pendingFrames.shift();
@@ -2016,7 +1993,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         return;
       }
 
-      liveSession.sendRealtimeInput({
+      liveConnection.sendRealtimeInput({
         audio: {
           data: frame.toString("base64"),
           mimeType
@@ -2049,11 +2026,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             });
           });
       try {
-        liveSession?.sendRealtimeInput({ audioStreamEnd: true });
+        liveConnection?.sendRealtimeInput({ audioStreamEnd: true });
       } catch {
         // Closing should not fail the HTTP server.
       }
-      liveSession?.close();
+      liveConnection?.close();
     });
 
     socket.on("error", (error) => {
@@ -2116,7 +2093,7 @@ ${transcript}`;
 *본 요약은 의학 행사 데이터를 바탕으로 실시간 자동 생성된 학술 서머리입니다.*
 
 #### 1. 대사 및 시신경 질환 이중 표적 신약 치료제 동향
-- 이번 세션에서는 **이중 표적 치료제(Dual-targeting therapies)**의 임상 작용 기전과 치료 성과를 비교 분석하였습니다.
+- 이번 강연에서는 **이중 표적 치료제(Dual-targeting therapies)**의 임상 작용 기전과 치료 성과를 비교 분석하였습니다.
 - 당뇨병 및 고위험군 심혈관 환자 관리에 있어 **GLP-1 수용체 작용제(GLP-1 receptor agonist)**의 우수한 대사 조절 능력과 장기 안정성이 확인되었습니다.
 
 #### 2. SGLT2 억제제의 심장 및 신장 동시 보호 기전

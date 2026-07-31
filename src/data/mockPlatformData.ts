@@ -65,7 +65,6 @@ export interface PlatformLayout {
   id: string;
   eventId: string;
   channelId: string;
-  sessionId?: string;
   name: string;
   columns: number;
   rows: number;
@@ -82,7 +81,6 @@ export interface PlatformLayout {
 export interface PlatformDisplayTarget {
   id: string;
   channelId: string;
-  sessionId?: string;
   name: string;
   description: string;
   layoutId: string;
@@ -93,7 +91,6 @@ export interface PlatformDisplayUrl {
   displayId: string;
   layoutId: string;
   channelSlug: string;
-  sessionSlug?: string;
   languageCode: string;
   label: string;
   path: string;

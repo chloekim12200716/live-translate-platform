@@ -2,7 +2,6 @@ export type PlatformVideoSourceType = "default" | "url" | "file";
 
 export interface PlatformVideoSourceMetadata {
   channelSlug: string;
-  sessionSlug?: string;
   sourceType: PlatformVideoSourceType;
   url?: string;
   fileName?: string;
@@ -20,7 +19,7 @@ export function getPlatformVideoSourceStorageKey(channelSlug: string) {
 
 function emitVideoSourceUpdated(channelSlug: string) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("platform-video-source-updated", { detail: { channelSlug, sessionSlug: channelSlug } }));
+  window.dispatchEvent(new CustomEvent("platform-video-source-updated", { detail: { channelSlug } }));
 }
 
 function openVideoDb(): Promise<IDBDatabase> {
@@ -100,12 +99,11 @@ export function loadStoredVideoMetadata(channelSlug: string): PlatformVideoSourc
   if (!rawMetadata) return null;
 
   try {
-    const metadata = JSON.parse(rawMetadata) as PlatformVideoSourceMetadata;
+    const metadata = JSON.parse(rawMetadata) as Partial<PlatformVideoSourceMetadata>;
     return {
       ...metadata,
-      channelSlug: metadata.channelSlug ?? metadata.sessionSlug ?? channelSlug,
-      sessionSlug: metadata.sessionSlug ?? metadata.channelSlug ?? channelSlug
-    };
+      channelSlug: metadata.channelSlug ?? channelSlug
+    } as PlatformVideoSourceMetadata;
   } catch (error) {
     console.error("Failed to parse video source metadata:", error);
     return null;

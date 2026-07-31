@@ -10,8 +10,7 @@ import {
 import { loadStoredLayout, loadStoredLayoutById } from "../../data/platformLayoutStorage";
 
 export default function LiveChannelPage() {
-  const { channelSlug, sessionSlug, languageCode } = useParams();
-  const resolvedChannelSlug = channelSlug ?? sessionSlug;
+  const { channelSlug, languageCode } = useParams();
   const [searchParams] = useSearchParams();
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
   const requestedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
@@ -23,7 +22,7 @@ export default function LiveChannelPage() {
     ?? mockPlatformLayout;
   const layout = loadStoredLayout(mockPlatformChannel.slug, fallbackLayout, fallbackLayout.id);
 
-  if (resolvedChannelSlug !== mockPlatformChannel.slug) {
+  if (channelSlug !== mockPlatformChannel.slug) {
     return <Navigate to={`/live/${mockPlatformChannel.slug}/${resolvedLanguage}`} replace />;
   }
 

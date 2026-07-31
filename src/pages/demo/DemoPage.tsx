@@ -47,7 +47,7 @@ export default function DemoPage({
             dictionary={dictionary}
             layout={appState.layout}
             setLayout={(layout) => updateServerState({ layout })}
-            sessionMode={appState.sessionMode}
+            broadcastMode={appState.broadcastMode}
           />
 
           <QAPanel

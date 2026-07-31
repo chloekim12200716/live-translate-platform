@@ -45,7 +45,6 @@ interface TranslationErrorLog {
 interface TranscriptDocumentSummary {
   id: string;
   channelSlug?: string;
-  sessionSlug?: string;
   targetLang: string;
   startedAt: string;
   endedAt?: string;
@@ -347,7 +346,7 @@ export default function AdminChannelsPage() {
               <article key={document.id} className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-black text-emerald-900">
-                    {document.channelSlug ?? document.sessionSlug} · {document.targetLang.toUpperCase()} · {document.entries.length} sentences
+                    {document.channelSlug} · {document.targetLang.toUpperCase()} · {document.entries.length} sentences
                   </p>
                   <time className="text-[11px] font-bold text-emerald-700">
                     {new Date(document.endedAt ?? document.startedAt).toLocaleString("ko-KR")}

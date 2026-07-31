@@ -37,7 +37,6 @@ export default function CaptionStreamDemoControls({ channelSlug, sourceLanguageC
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         channelSlug,
-        sessionSlug: channelSlug,
         sourceLang: sourceLanguageCode,
         intervalMs: 3500
       })

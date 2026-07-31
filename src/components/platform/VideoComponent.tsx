@@ -94,8 +94,8 @@ export default function VideoComponent({ channel }: VideoComponentProps) {
     };
 
     const handleVideoSourceUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ channelSlug?: string; sessionSlug?: string }>).detail;
-      const updatedChannelSlug = detail?.channelSlug ?? detail?.sessionSlug;
+      const detail = (event as CustomEvent<{ channelSlug?: string }>).detail;
+      const updatedChannelSlug = detail?.channelSlug;
       if (updatedChannelSlug && updatedChannelSlug !== channel.slug) return;
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
@@ -106,7 +106,7 @@ export default function VideoComponent({ channel }: VideoComponentProps) {
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== `videoSource:${channel.slug}`) return;
-      handleVideoSourceUpdated(new CustomEvent("platform-video-source-updated", { detail: { channelSlug: channel.slug, sessionSlug: channel.slug } }));
+      handleVideoSourceUpdated(new CustomEvent("platform-video-source-updated", { detail: { channelSlug: channel.slug } }));
     };
 
     void loadVideoSource();

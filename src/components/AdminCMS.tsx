@@ -40,16 +40,16 @@ export default function AdminCMS({
   const [micActive, setMicActive] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // Standard pre-defined clinical mock sessions
-  const mockEnSession = [
+  // Standard pre-defined clinical mock channel script
+  const mockEnChannelScript = [
     { text: "In today's clinical update, we will discuss the dual-targeting mechanism of GLP-1 receptor agonist and GIP receptor co-agonists.", time: 10 },
     { text: "Recent randomized clinical trials showed significant cardiovascular benefits, especially for patients with high cardiovascular risk.", time: 25 },
     { text: "Moreover, SGLT2 inhibitors like empagliflozin have demonstrated a reduction in the primary endpoint of cardiovascular death or hospitalization for heart failure.", time: 45 },
     { text: "We should also monitor renal functions, including eGFR, to assess any progression of chronic kidney disease.", time: 65 }
   ];
 
-  const mockKoSession = [
-    { text: "오늘 세션에서는 시신경척수염 범주질환, 즉 NMOSD 환자의 최신 치료 전략에 대해 설명해 드리겠습니다.", time: 10 },
+  const mockKoChannelScript = [
+    { text: "오늘 강연에서는 시신경척수염 범주질환, 즉 NMOSD 환자의 최신 치료 전략에 대해 설명해 드리겠습니다.", time: 10 },
     { text: "AQP4-IgG 양성 환자들의 장기 재발을 효과적으로 방지하기 위해 이중 표적 항체 치료가 선구적인 역할을 하고 있습니다.", time: 25 },
     { text: "실제 임상 데이터상 약물 투여군은 primary endpoint인 재발 위험을 대조군 대비 무려 70% 이상 유의하게 낮추었습니다.", time: 45 },
     { text: "모니터링 과정에서 백혈구 감소증이나 주사 부위 감염 같은 예측 가능한 adverse event 유무를 항시 체크해야 합니다.", time: 65 }
@@ -139,7 +139,7 @@ export default function AdminCMS({
       setIsSimulating(false);
     } else {
       setIsSimulating(true);
-      const sessionData = appState.speakerLang === "en" ? mockEnSession : mockKoSession;
+      const channelScript = appState.speakerLang === "en" ? mockEnChannelScript : mockKoChannelScript;
       let currentIndex = 0;
 
       // Clear existing first to make it a clean live simulation demo
@@ -148,13 +148,13 @@ export default function AdminCMS({
           onUpdateState({ subtitles: [] });
           
           simTimerRef.current = setInterval(async () => {
-            if (currentIndex >= sessionData.length) {
+            if (currentIndex >= channelScript.length) {
               if (simTimerRef.current) clearInterval(simTimerRef.current);
               setIsSimulating(false);
               return;
             }
 
-            const currentSpeech = sessionData[currentIndex];
+            const currentSpeech = channelScript[currentIndex];
             const source = appState.speakerLang;
             const target = source === "en" ? "ko" : "en";
 
@@ -310,23 +310,23 @@ export default function AdminCMS({
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
         <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
           <Settings className="w-4 h-4 text-indigo-600" />
-          의학 학술행사 세션 정보 제어 (CMS)
+          의학 학술행사 채널 정보 제어 (CMS)
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* 1. Session Mode Toggle */}
+          {/* 1. Broadcast Mode Toggle */}
           <div className="space-y-1 text-left">
             <label className="text-xs font-bold text-slate-500 block">행사 운영 모드</label>
             <div className="flex bg-slate-100 rounded-lg p-1">
               <button
-                onClick={() => onUpdateState({ sessionMode: "live" })}
-                className={`flex-1 py-1.5 rounded-md text-xs font-semibold ${appState.sessionMode === "live" ? "bg-rose-500 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                onClick={() => onUpdateState({ broadcastMode: "live" })}
+                className={`flex-1 py-1.5 rounded-md text-xs font-semibold ${appState.broadcastMode === "live" ? "bg-rose-500 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
               >
                 LIVE 중계
               </button>
               <button
-                onClick={() => onUpdateState({ sessionMode: "vod" })}
-                className={`flex-1 py-1.5 rounded-md text-xs font-semibold ${appState.sessionMode === "vod" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                onClick={() => onUpdateState({ broadcastMode: "vod" })}
+                className={`flex-1 py-1.5 rounded-md text-xs font-semibold ${appState.broadcastMode === "vod" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
               >
                 VOD 다시보기
               </button>

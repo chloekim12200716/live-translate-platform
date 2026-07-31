@@ -18,7 +18,6 @@ const captionByLanguage: Record<string, string> = {
 interface CaptionComponentProps {
   languageCode: string;
   channelSlug: string;
-  sessionSlug?: string;
   sourceLanguageCode: string;
   sourceText: string;
   style?: PlatformCaptionStyle;
@@ -184,7 +183,6 @@ export default function CaptionComponent({
 
     const streamParams = new URLSearchParams({
       channelSlug,
-      sessionSlug: channelSlug,
       sourceLang: normalizedSourceLanguage,
       targetLang: normalizedLanguage,
       replayLatest: "true",

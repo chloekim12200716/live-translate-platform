@@ -3,7 +3,6 @@ import { ExternalLink, Radio, ScreenShare, Send, Square } from "lucide-react";
 
 interface LiveAudioTranslationTesterProps {
   channelSlug: string;
-  sessionSlug?: string;
   layoutId?: string;
   displayName?: string;
   defaultTargetLanguageCode?: string;
@@ -65,7 +64,6 @@ function createLiveAudioWebSocketUrl(channelSlug: string, targetLanguageCode: st
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({
     channelSlug,
-    sessionSlug: channelSlug,
     sourceLang: "auto",
     targetLang: targetLanguageCode,
     mode: translationMode,
@@ -184,11 +182,10 @@ export default function LiveAudioTranslationTester({
       pushDiagnosticEvent("publishing sample English caption");
       const response = await fetch("/api/captions/publish", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelSlug,
-          sessionSlug: channelSlug,
-          sourceLang: "en",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channelSlug,
+        sourceLang: "en",
           speaker: "Sample Test",
           text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk.",
           isFinal: true
@@ -257,7 +254,7 @@ export default function LiveAudioTranslationTester({
           setStatusMessage("오디오 frame 전송 중");
           pushDiagnosticEvent("server ready, sending audio frames");
         } else if (data.type === "open") {
-          pushDiagnosticEvent("Gemini Live session opened");
+          pushDiagnosticEvent("Gemini Live connection opened");
         } else if (data.type === "connecting") {
           pushDiagnosticEvent(data.message || "connecting to Gemini Live");
         } else if (data.type === "debug") {
@@ -278,7 +275,7 @@ export default function LiveAudioTranslationTester({
             data.code ? `code ${data.code}` : "",
             data.reason ? data.reason : ""
           ].filter(Boolean).join(" · ");
-          setStatusMessage(closeDetail ? `Live API 세션 종료됨: ${closeDetail}` : "Live API 세션 종료됨");
+          setStatusMessage(closeDetail ? `Live API 연결 종료됨: ${closeDetail}` : "Live API 연결 종료됨");
           pushDiagnosticEvent(closeDetail ? `closed: ${closeDetail}` : "closed");
         }
       };

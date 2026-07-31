@@ -4,12 +4,6 @@ import {
   PlatformLayout
 } from "./mockPlatformData";
 
-const legacyDefaultLayoutId = "layout-default-live-stage";
-
-export function getLayoutStorageKey(channelSlug: string) {
-  return `layout:${channelSlug}`;
-}
-
 export function getPlatformLayoutStorageKey(channelSlug: string, layoutId: string) {
   return `layout:${channelSlug}:${layoutId}`;
 }
@@ -21,8 +15,7 @@ export function getPlatformDisplaysStorageKey(channelSlug: string) {
 function normalizeLayout(layout: PlatformLayout): PlatformLayout {
   return {
     ...layout,
-    channelId: layout.channelId ?? layout.sessionId ?? "",
-    sessionId: layout.sessionId,
+    channelId: layout.channelId ?? "",
     canvasWidth: layout.canvasWidth ?? 1920,
     canvasHeight: layout.canvasHeight ?? 1080,
     backgroundFit: layout.backgroundFit ?? "cover",
@@ -43,8 +36,7 @@ export function loadStoredLayout(channelSlug: string, fallbackLayout: PlatformLa
   if (typeof window === "undefined") return fallbackLayout;
 
   const rawPlatformLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
-  const rawLegacyLayout = layoutId === legacyDefaultLayoutId ? window.localStorage.getItem(getLayoutStorageKey(channelSlug)) : null;
-  const rawLayout = rawPlatformLayout ?? rawLegacyLayout;
+  const rawLayout = rawPlatformLayout;
   if (!rawLayout) return normalizeLayout(fallbackLayout);
 
   try {
@@ -78,15 +70,12 @@ export function clearStoredLayout(channelSlug: string, layoutId?: string) {
     window.localStorage.removeItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
     return;
   }
-
-  window.localStorage.removeItem(getLayoutStorageKey(channelSlug));
 }
 
 function normalizeDisplay(display: PlatformDisplayTarget): PlatformDisplayTarget {
   return {
     ...display,
-    channelId: display.channelId ?? display.sessionId ?? "",
-    sessionId: display.sessionId
+    channelId: display.channelId ?? ""
   };
 }
 

@@ -11,7 +11,7 @@ interface VideoPlayerProps {
   dictionary: DictionaryItem[];
   layout: string;
   setLayout: (layout: string) => void;
-  sessionMode: string;
+  broadcastMode: string;
 }
 
 export default function VideoPlayer({
@@ -23,7 +23,7 @@ export default function VideoPlayer({
   dictionary,
   layout,
   setLayout,
-  sessionMode
+  broadcastMode
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -227,9 +227,9 @@ export default function VideoPlayer({
       {/* Top Banner Status Bar */}
       <div className="bg-slate-950 px-4 py-2.5 flex justify-between items-center text-xs border-b border-slate-800/60">
         <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${sessionMode === "live" ? "bg-rose-500 animate-pulse" : "bg-teal-500"}`}></span>
+          <span className={`w-2.5 h-2.5 rounded-full ${broadcastMode === "live" ? "bg-rose-500 animate-pulse" : "bg-teal-500"}`}></span>
           <span className="font-medium text-slate-200 uppercase tracking-wider">
-            {sessionMode === "live" ? "LIVE BroadCast" : "VOD Replay"}
+            {broadcastMode === "live" ? "LIVE Broadcast" : "VOD Replay"}
           </span>
           <span className="text-slate-500 font-mono">|</span>
           <span className="text-slate-400 font-sans font-medium">글로벌 하이브리드 의학 심포지엄</span>
@@ -332,7 +332,7 @@ export default function VideoPlayer({
               </div>
             ) : (
               <div className="bg-slate-950/50 backdrop-blur-sm rounded-xl p-3 max-w-md mx-auto text-center text-slate-500 text-xs">
-                {sessionMode === "live" ? "연자의 발표 발화 대기 중..." : "자막이 제공되는 시점입니다."}
+                {broadcastMode === "live" ? "연자의 발표 발화 대기 중..." : "자막이 제공되는 시점입니다."}
               </div>
             )}
           </div>

@@ -3,7 +3,6 @@ import { Mic, Radio, Square } from "lucide-react";
 
 interface LiveSpeechCaptionTesterProps {
   channelSlug: string;
-  sessionSlug?: string;
   defaultSourceLanguageCode: string;
 }
 
@@ -84,7 +83,6 @@ export default function LiveSpeechCaptionTester({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         channelSlug,
-        sessionSlug: channelSlug,
         speaker: "Live STT",
         sourceLang: sourceLanguageCode,
         text: trimmedText,

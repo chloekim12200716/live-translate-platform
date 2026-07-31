@@ -276,7 +276,7 @@ export default function TranscriptSidebar({
                   실시간 대본 기반 AI 임상 요약
                 </h3>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  현재까지 생성된 세션 대본을 바탕으로 신약 기전, 1차 평가변수(Primary Endpoint) 및 학술 요약 보고서를 Gemini 3.5가 실시간 요약합니다.
+                  현재까지 생성된 강연 대본을 바탕으로 신약 기전, 1차 평가변수(Primary Endpoint) 및 학술 요약 보고서를 Gemini 3.5가 실시간 요약합니다.
                 </p>
               </div>
               <button
@@ -292,7 +292,7 @@ export default function TranscriptSidebar({
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5" />
-                    학술 세션 요약문 생성
+                    학술 강연 요약문 생성
                   </>
                 )}
               </button>

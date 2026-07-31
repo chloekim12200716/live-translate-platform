@@ -28,8 +28,6 @@ function RoutedApp(appData: AppDataContext) {
               <Route path="/admin" element={<AdminPage {...appData} />} />
               <Route path="/admin/channels" element={<AdminChannelsPage />} />
               <Route path="/admin/channels/:channelId/layout" element={<ChannelLayoutEditorPage />} />
-              <Route path="/admin/sessions" element={<Navigate to="/admin/channels" replace />} />
-              <Route path="/admin/sessions/:sessionId/layout" element={<ChannelLayoutEditorPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AppShell>
@@ -41,7 +39,7 @@ function RoutedApp(appData: AppDataContext) {
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>({
-    sessionMode: "live",
+    broadcastMode: "live",
     speakerLang: "en",
     outputLang: "ko",
     isCapturing: false,
