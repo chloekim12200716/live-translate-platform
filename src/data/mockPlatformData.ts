@@ -108,7 +108,7 @@ export const mockPlatformEvent: PlatformEvent = {
 export const mockPlatformChannel: PlatformChannel = {
   id: "main-keynote",
   eventId: mockPlatformEvent.id,
-  title: "Dual-Targeting Therapy for Cardiometabolic Diseases",
+  title: "실시간 의학행사 채널",
   slug: "main-keynote",
   speakerName: "Dr. Robert C.",
   speakerAffiliation: "Cleveland Clinic",
@@ -155,6 +155,86 @@ export const mockPlatformChannel: PlatformChannel = {
     }
   ]
 };
+
+export const mockEpidemiologyChannel: PlatformChannel = {
+  id: "epidemiology-live",
+  eventId: mockPlatformEvent.id,
+  title: "실시간 역학회 채널",
+  slug: "epidemiology-live",
+  speakerName: "Dr. Amelia Park",
+  speakerAffiliation: "Global Epidemiology Society",
+  sourceLanguageCode: "en",
+  videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+  sampleCaptionText: "We will review outbreak surveillance indicators and population-level risk signals.",
+  mode: "live",
+  slides: [
+    {
+      id: "epi-slide-1",
+      title: "감염병 감시 지표와 위험 신호",
+      subtitle: "Outbreak Surveillance and Risk Signals",
+      points: [
+        "지역별 발생률 변화와 이동 평균 추세",
+        "고위험군 보호를 위한 조기 경보 기준",
+        "현장 보고 데이터와 실험실 확진 데이터의 결합"
+      ],
+      startsAtSeconds: 0,
+      endsAtSeconds: 45
+    },
+    {
+      id: "epi-slide-2",
+      title: "Population-Level Intervention Strategy",
+      subtitle: "집단 수준 개입 전략",
+      points: [
+        "접촉률 감소 정책의 시점별 효과",
+        "백신 접종률과 재감염 위험 추정",
+        "실시간 대시보드 기반 의사결정"
+      ],
+      startsAtSeconds: 45,
+      endsAtSeconds: null
+    }
+  ]
+};
+
+export const mockPressBriefingChannel: PlatformChannel = {
+  id: "press-briefing-live",
+  eventId: mockPlatformEvent.id,
+  title: "실시간 기자간담회 채널",
+  slug: "press-briefing-live",
+  speakerName: "Press Office",
+  speakerAffiliation: "Medical Affairs",
+  sourceLanguageCode: "ko",
+  videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+  sampleCaptionText: "오늘 기자간담회에서는 신약 허가 일정과 임상 데이터 공개 계획을 설명드리겠습니다.",
+  mode: "live",
+  slides: [
+    {
+      id: "press-slide-1",
+      title: "기자간담회 주요 발표",
+      subtitle: "Regulatory Timeline and Clinical Disclosure",
+      points: [
+        "신약 허가 신청 일정",
+        "3상 임상 결과 공개 계획",
+        "질의응답 및 후속 자료 배포 안내"
+      ],
+      startsAtSeconds: 0,
+      endsAtSeconds: null
+    }
+  ]
+};
+
+export const mockPlatformChannels: PlatformChannel[] = [
+  mockPlatformChannel,
+  mockEpidemiologyChannel,
+  mockPressBriefingChannel
+];
+
+export function findPlatformChannelById(channelId: string | undefined) {
+  return mockPlatformChannels.find((channel) => channel.id === channelId);
+}
+
+export function findPlatformChannelBySlug(channelSlug: string | undefined) {
+  return mockPlatformChannels.find((channel) => channel.slug === channelSlug);
+}
 
 export const mockPlatformLayout: PlatformLayout = {
   id: "layout-default-live-stage",
@@ -212,6 +292,28 @@ export const mockPlatformLayouts: PlatformLayout[] = [
       { id: "component-caption", type: "caption", label: "Caption", x: 2, y: 9, w: 16, h: 3, visible: true, zIndex: 3, captionStyle: { ...defaultCaptionStyle } },
       { id: "component-notice", type: "notice", label: "Notice", x: 2, y: 12, w: 21, h: 2, visible: true, zIndex: 2 }
     ]
+  },
+  {
+    ...mockPlatformLayout,
+    id: "layout-epidemiology-caption",
+    channelId: mockEpidemiologyChannel.id,
+    name: "Epidemiology Caption Stage",
+    backgroundColor: "#0f172a",
+    components: [
+      { id: "component-caption", type: "caption", label: "Caption", x: 3, y: 8, w: 18, h: 4, visible: true, zIndex: 3, captionStyle: { ...defaultCaptionStyle } },
+      { id: "component-notice", type: "notice", label: "Notice", x: 4, y: 12, w: 16, h: 2, visible: true, zIndex: 2 }
+    ]
+  },
+  {
+    ...mockPlatformLayout,
+    id: "layout-press-briefing-caption",
+    channelId: mockPressBriefingChannel.id,
+    name: "Press Briefing Caption Stage",
+    backgroundColor: "#111827",
+    components: [
+      { id: "component-caption", type: "caption", label: "Caption", x: 2, y: 9, w: 20, h: 3, visible: true, zIndex: 3, captionStyle: { ...defaultCaptionStyle } },
+      { id: "component-notice", type: "notice", label: "Notice", x: 3, y: 12, w: 18, h: 2, visible: true, zIndex: 2 }
+    ]
   }
 ];
 
@@ -247,23 +349,44 @@ export const mockPlatformDisplays: PlatformDisplayTarget[] = [
     description: "청중 질문 영역을 강조하는 상호작용형 화면",
     layoutId: "layout-qa-focus",
     defaultLanguageCode: "en"
+  },
+  {
+    id: "epidemiology-main",
+    channelId: mockEpidemiologyChannel.id,
+    name: "역학회 자막 송출",
+    description: "역학회 발표를 위한 실시간 자막 오버레이 채널",
+    layoutId: "layout-epidemiology-caption",
+    defaultLanguageCode: "ko"
+  },
+  {
+    id: "press-briefing-main",
+    channelId: mockPressBriefingChannel.id,
+    name: "기자간담회 자막 송출",
+    description: "기자간담회 질의응답과 발표 내용을 위한 실시간 자막 오버레이 채널",
+    layoutId: "layout-press-briefing-caption",
+    defaultLanguageCode: "en"
   }
 ];
 
 export const mockDisplayUrls: PlatformDisplayUrl[] = [
-  ...mockPlatformDisplays.flatMap((display) => [
-    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, languageCode: "ar", label: `${display.name} · Arabic`, path: `/live/${mockPlatformChannel.slug}/ar?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, languageCode: "zh", label: `${display.name} · Chinese`, path: `/live/${mockPlatformChannel.slug}/zh?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, languageCode: "en", label: `${display.name} · English`, path: `/live/${mockPlatformChannel.slug}/en?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, languageCode: "fr", label: `${display.name} · French`, path: `/live/${mockPlatformChannel.slug}/fr?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, languageCode: "ru", label: `${display.name} · Russian`, path: `/live/${mockPlatformChannel.slug}/ru?layoutId=${display.layoutId}` },
-    { displayId: display.id, layoutId: display.layoutId, channelSlug: mockPlatformChannel.slug, languageCode: "es", label: `${display.name} · Spanish`, path: `/live/${mockPlatformChannel.slug}/es?layoutId=${display.layoutId}` }
-  ])
+  ...mockPlatformDisplays.flatMap((display) => {
+    const channel = findPlatformChannelById(display.channelId) ?? mockPlatformChannel;
+
+    return [
+      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "ar", label: `${display.name} · Arabic`, path: `/live/${channel.slug}/ar?layoutId=${display.layoutId}` },
+      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "zh", label: `${display.name} · Chinese`, path: `/live/${channel.slug}/zh?layoutId=${display.layoutId}` },
+      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "en", label: `${display.name} · English`, path: `/live/${channel.slug}/en?layoutId=${display.layoutId}` },
+      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "fr", label: `${display.name} · French`, path: `/live/${channel.slug}/fr?layoutId=${display.layoutId}` },
+      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "ru", label: `${display.name} · Russian`, path: `/live/${channel.slug}/ru?layoutId=${display.layoutId}` },
+      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "es", label: `${display.name} · Spanish`, path: `/live/${channel.slug}/es?layoutId=${display.layoutId}` }
+    ];
+  })
 ];
 
 export const mockPlatformData = {
   event: mockPlatformEvent,
   channel: mockPlatformChannel,
+  channels: mockPlatformChannels,
   layout: mockPlatformLayout,
   layouts: mockPlatformLayouts,
   displays: mockPlatformDisplays,

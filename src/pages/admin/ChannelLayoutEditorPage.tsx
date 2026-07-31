@@ -10,10 +10,12 @@ import {
 } from "lucide-react";
 import {
   defaultCaptionStyle,
+  findPlatformChannelById,
   mockPlatformLayout,
   mockPlatformLayouts,
   mockPlatformDisplays,
   mockPlatformChannel,
+  mockPlatformData,
   PlatformComponentType,
   PlatformDisplayTarget,
   PlatformLayout,
@@ -21,6 +23,7 @@ import {
 } from "../../data/mockPlatformData";
 import {
   clearStoredLayout,
+  loadStoredPlatformChannels,
   loadStoredLayoutById,
   loadStoredPlatformDisplays,
   loadStoredLayout,
@@ -52,18 +55,31 @@ function toSlug(value: string) {
 export default function ChannelLayoutEditorPage() {
   const { channelId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isKnownChannel = channelId === mockPlatformChannel.id;
-  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(mockPlatformChannel.slug));
+  const storedChannels = loadStoredPlatformChannels(mockPlatformData.event.id);
+  const selectedChannel = findPlatformChannelById(channelId)
+    ?? storedChannels.find((channel) => channel.id === channelId);
+  const isKnownChannel = Boolean(selectedChannel);
+  const channel = selectedChannel ?? mockPlatformChannel;
+  const [customDisplays, setCustomDisplays] = useState(() => loadStoredPlatformDisplays(channel.slug));
   const selectedLayoutId = searchParams.get("layoutId") ?? mockPlatformLayout.id;
   const customLayouts = customDisplays
-    .map((display) => loadStoredLayoutById(mockPlatformChannel.slug, display.layoutId))
+    .map((display) => loadStoredLayoutById(channel.slug, display.layoutId))
     .filter((customLayout): customLayout is PlatformLayout => Boolean(customLayout));
-  const allPlatformDisplays = [...mockPlatformDisplays, ...customDisplays];
-  const allBaseLayouts = [...mockPlatformLayouts, ...customLayouts];
-  const selectedBaseLayout = allBaseLayouts.find((layout) => layout.id === selectedLayoutId) ?? mockPlatformLayout;
+  const mockDisplaysForChannel = mockPlatformDisplays.filter((display) => display.channelId === channel.id);
+  const mockLayoutsForChannel = mockPlatformLayouts.filter((layout) => layout.channelId === channel.id);
+  const allPlatformDisplays = [...mockDisplaysForChannel, ...customDisplays];
+  const allBaseLayouts = [...mockLayoutsForChannel, ...customLayouts];
+  const selectedBaseLayout = allBaseLayouts.find((layout) => layout.id === selectedLayoutId)
+    ?? allBaseLayouts[0]
+    ?? {
+      ...mockPlatformLayout,
+      id: `layout-${channel.slug}-caption`,
+      channelId: channel.id,
+      name: `${channel.title} Caption Stage`
+    };
   const selectedDisplay = allPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
-  const previewLanguageCode = selectedDisplay?.defaultLanguageCode ?? mockPlatformChannel.sourceLanguageCode;
-  const [layout, setLayout] = useState(() => loadStoredLayout(mockPlatformChannel.slug, selectedBaseLayout, selectedBaseLayout.id));
+  const previewLanguageCode = selectedDisplay?.defaultLanguageCode ?? channel.sourceLanguageCode;
+  const [layout, setLayout] = useState(() => loadStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isBackgroundDragActive, setIsBackgroundDragActive] = useState(false);
@@ -96,11 +112,15 @@ export default function ChannelLayoutEditorPage() {
   const selectedComponent = layout.components.find((component) => component.id === selectedComponentId) ?? layout.components[0];
 
   useEffect(() => {
-    const nextLayout = loadStoredLayout(mockPlatformChannel.slug, selectedBaseLayout, selectedBaseLayout.id);
+    setCustomDisplays(loadStoredPlatformDisplays(channel.slug));
+  }, [channel.slug]);
+
+  useEffect(() => {
+    const nextLayout = loadStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id);
     setLayout(nextLayout);
     setSelectedComponentId(nextLayout.components[0]?.id ?? "");
     setSavedAt(null);
-  }, [selectedBaseLayout.id]);
+  }, [channel.slug, selectedBaseLayout.id]);
 
   const handleLayoutSelect = (layoutId: string) => {
     setSearchParams({ layoutId });
@@ -113,18 +133,18 @@ export default function ChannelLayoutEditorPage() {
     if (!name) return;
 
     const idSuffix = `${toSlug(name)}-${Date.now()}`;
-    const layoutId = `layout-${idSuffix}`;
-    const displayId = `display-${idSuffix}`;
+    const layoutId = `layout-${channel.slug}-${idSuffix}`;
+    const displayId = `display-${channel.slug}-${idSuffix}`;
     const nextLayout: PlatformLayout = {
       ...layout,
       id: layoutId,
       name,
-      channelId: mockPlatformChannel.id,
+      channelId: channel.id,
       components: layout.components.map((component) => ({ ...component }))
     };
     const nextDisplay: PlatformDisplayTarget = {
       id: displayId,
-      channelId: mockPlatformChannel.id,
+      channelId: channel.id,
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,
@@ -132,8 +152,8 @@ export default function ChannelLayoutEditorPage() {
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
-    saveStoredLayout(mockPlatformChannel.slug, nextLayout, layoutId);
-    saveStoredPlatformDisplays(mockPlatformChannel.slug, nextDisplays);
+    saveStoredLayout(channel.slug, nextLayout, layoutId);
+    saveStoredPlatformDisplays(channel.slug, nextDisplays);
     setCustomDisplays(nextDisplays);
     setNewDisplayName("");
     setNewDisplayDescription("");
@@ -335,16 +355,16 @@ export default function ChannelLayoutEditorPage() {
   };
 
   const handleSaveLayout = () => {
-    saveStoredLayout(mockPlatformChannel.slug, layout, selectedBaseLayout.id);
+    saveStoredLayout(channel.slug, layout, selectedBaseLayout.id);
     setSavedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
   };
 
   const handleResetLayout = () => {
-    const isMockLayout = mockPlatformLayouts.some((baseLayout) => baseLayout.id === selectedBaseLayout.id);
+    const isMockLayout = mockLayoutsForChannel.some((baseLayout) => baseLayout.id === selectedBaseLayout.id);
     if (isMockLayout) {
-      clearStoredLayout(mockPlatformChannel.slug, selectedBaseLayout.id);
+      clearStoredLayout(channel.slug, selectedBaseLayout.id);
     } else {
-      saveStoredLayout(mockPlatformChannel.slug, selectedBaseLayout, selectedBaseLayout.id);
+      saveStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id);
     }
 
     setLayout(selectedBaseLayout);
@@ -435,7 +455,7 @@ export default function ChannelLayoutEditorPage() {
   if (!isKnownChannel) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-        알 수 없는 채널입니다. 현재 mock 채널 ID는 <span className="font-mono">{mockPlatformChannel.id}</span>입니다.
+        알 수 없는 채널입니다. 채널 관리 화면에서 생성된 채널을 선택하세요.
       </div>
     );
   }
@@ -474,14 +494,14 @@ export default function ChannelLayoutEditorPage() {
               저장
             </button>
             <Link
-              to={`/live/${mockPlatformChannel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}`}
+              to={`/live/${channel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-slate-950 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-slate-800 sm:flex-none"
             >
               저장 후 자막 미리보기
             </Link>
             <Link
-              to={`/live/${mockPlatformChannel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&view=full`}
+              to={`/live/${channel.slug}/${previewLanguageCode}?layoutId=${selectedBaseLayout.id}&view=full`}
               onClick={handleSaveLayout}
               className="flex-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-center text-sm font-black text-white shadow-sm hover:bg-emerald-700 sm:flex-none"
             >
@@ -519,11 +539,11 @@ export default function ChannelLayoutEditorPage() {
           <form onSubmit={handleAddPlatformLayout} className="mt-4 rounded-xl border border-indigo-100 bg-white p-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_120px_auto]">
               <label className="text-xs font-bold text-slate-700">
-                새 채널 이름
+                새 레이아웃 이름
                 <input
                   value={newDisplayName}
                   onChange={(event) => setNewDisplayName(event.target.value)}
-                  placeholder="예: 로비 전광판"
+                  placeholder="예: 로비 전광판 자막"
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
                 />
               </label>
@@ -532,7 +552,7 @@ export default function ChannelLayoutEditorPage() {
                 <input
                   value={newDisplayDescription}
                   onChange={(event) => setNewDisplayDescription(event.target.value)}
-                  placeholder="현재 레이아웃을 복제해서 새 채널로 저장"
+                  placeholder="현재 레이아웃을 복제해서 새 레이아웃으로 저장"
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
                 />
               </label>
@@ -553,7 +573,7 @@ export default function ChannelLayoutEditorPage() {
                   type="submit"
                   className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
                 >
-                  채널 추가
+                  레이아웃 추가
                 </button>
               </div>
             </div>

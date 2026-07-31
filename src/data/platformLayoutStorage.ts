@@ -1,8 +1,13 @@
 import {
   defaultCaptionStyle,
+  PlatformChannel,
   PlatformDisplayTarget,
   PlatformLayout
 } from "./mockPlatformData";
+
+export function getPlatformChannelsStorageKey(eventId: string) {
+  return `platformChannels:${eventId}`;
+}
 
 export function getPlatformLayoutStorageKey(channelSlug: string, layoutId: string) {
   return `layout:${channelSlug}:${layoutId}`;
@@ -77,6 +82,42 @@ function normalizeDisplay(display: PlatformDisplayTarget): PlatformDisplayTarget
     ...display,
     channelId: display.channelId ?? ""
   };
+}
+
+function normalizeChannel(channel: PlatformChannel): PlatformChannel {
+  return {
+    ...channel,
+    id: channel.id ?? channel.slug,
+    slug: channel.slug ?? channel.id,
+    mode: channel.mode ?? "live",
+    slides: channel.slides ?? []
+  };
+}
+
+export function loadStoredPlatformChannels(eventId: string): PlatformChannel[] {
+  if (typeof window === "undefined") return [];
+
+  const rawChannels = window.localStorage.getItem(getPlatformChannelsStorageKey(eventId));
+  if (!rawChannels) return [];
+
+  try {
+    const parsedChannels = JSON.parse(rawChannels) as PlatformChannel[];
+    return parsedChannels
+      .map(normalizeChannel)
+      .filter((channel) => channel.id && channel.slug && channel.title);
+  } catch (error) {
+    console.error("Failed to parse stored platform channels:", error);
+    return [];
+  }
+}
+
+export function saveStoredPlatformChannels(eventId: string, channels: PlatformChannel[]) {
+  window.localStorage.setItem(getPlatformChannelsStorageKey(eventId), JSON.stringify(channels.map(normalizeChannel)));
+}
+
+export function deleteStoredPlatformChannel(eventId: string, channelId: string) {
+  const channels = loadStoredPlatformChannels(eventId);
+  saveStoredPlatformChannels(eventId, channels.filter((channel) => channel.id !== channelId));
 }
 
 export function loadStoredPlatformDisplays(channelSlug: string): PlatformDisplayTarget[] {
