@@ -284,7 +284,7 @@ export default function LiveAudioTranslationTester({
         <div className="flex flex-col justify-end gap-2">
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm">
             통역 음성은 언어 URL에서 재생
-            <span className="block text-[11px] font-semibold text-slate-400">각 URL에 audio=1 사용</span>
+            <span className="block text-[11px] font-semibold text-slate-400">URL 안의 음성 버튼으로 제어</span>
           </div>
           <button
             type="button"
@@ -325,7 +325,7 @@ export default function LiveAudioTranslationTester({
         캡처는 채널당 한 번만 시작하면 되고, 열려 있는 모든 언어 URL은 같은 stream을 동시에 구독합니다.
         문장 단위 모드는 최종 transcript 저장에 적합하고, 실시간 반영 모드는 draft 자막을 더 빨리 보여줍니다.
         실제 응답 시간은 Gemini Live API 상태와 네트워크에 영향을 받습니다.
-        통역 음성은 언어별 URL에 `audio=1`을 붙인 뒤 화면의 음성 시작 버튼을 눌러 확인합니다.
+        통역 음성은 언어별 URL 화면의 음성 시작 버튼을 눌러 확인합니다.
       </p>
     </div>
   );

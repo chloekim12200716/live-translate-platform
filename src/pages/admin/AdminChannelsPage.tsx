@@ -575,7 +575,7 @@ export default function AdminChannelsPage() {
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Language URLs</p>
                     <p className="mt-1 text-sm text-slate-500">
-                      아래 URL은 기본적으로 투명 자막 오버레이 화면으로 열립니다. 전체 레이아웃 검토가 필요하면 URL에 `view=full`을 붙여 확인합니다.
+                      아래 URL은 기본적으로 투명 자막 오버레이와 통역 음성 버튼을 함께 제공합니다. 전체 레이아웃 검토는 `view=full`, 버튼 없는 캡처는 `audio=0`을 붙여 확인합니다.
                     </p>
                   </div>
                   <button
@@ -588,39 +588,22 @@ export default function AdminChannelsPage() {
                   </button>
                 </div>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {selectedDisplayUrls.map((displayUrl) => {
-                    const interpretationPath = `${displayUrl.path}${displayUrl.path.includes("?") ? "&" : "?"}audio=1`;
-
-                    return (
-                      <article
-                        key={displayUrl.path}
-                        className="rounded-xl border border-slate-200 bg-slate-50 p-3"
-                      >
-                        <p className="text-xs font-bold text-slate-900">{displayUrl.languageCode.toUpperCase()} 자막 화면</p>
-                        <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Link
-                            to={displayUrl.path}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-700 hover:bg-slate-100"
-                          >
-                            자막
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
-                          <Link
-                            to={interpretationPath}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-800 hover:bg-emerald-100"
-                          >
-                            통역
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        </div>
-                      </article>
-                    );
-                  })}
+                  {selectedDisplayUrls.map((displayUrl) => (
+                    <Link
+                      key={displayUrl.path}
+                      to={displayUrl.path}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold text-slate-900">{displayUrl.languageCode.toUpperCase()} 라이브 URL</p>
+                        <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                      </div>
+                      <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
+                      <p className="mt-2 text-[11px] font-semibold text-slate-500">자막 표시 + 통역 음성 버튼</p>
+                    </Link>
+                  ))}
                 </div>
               </section>
 

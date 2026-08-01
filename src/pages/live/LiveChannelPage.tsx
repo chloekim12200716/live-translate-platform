@@ -25,7 +25,8 @@ export default function LiveChannelPage() {
   const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
   const shouldShowFullLayout = searchParams.get("view") === "full" || searchParams.get("overlay") === "none";
   const overlayMode = shouldShowFullLayout ? "none" : "caption";
-  const enableInterpretationAudio = ["1", "true", "yes"].includes((searchParams.get("audio") ?? "").toLowerCase());
+  const audioParam = (searchParams.get("audio") ?? "").toLowerCase();
+  const enableInterpretationAudio = !["0", "false", "no"].includes(audioParam);
   const transparentBackground = overlayMode === "caption"
     || ["1", "true", "yes"].includes((searchParams.get("transparent") ?? "").toLowerCase());
 
