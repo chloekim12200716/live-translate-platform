@@ -156,7 +156,7 @@ export default function VideoComponent({ channel }: VideoComponentProps) {
       <div className="pointer-events-none absolute bottom-3 left-3 flex max-w-[80%] items-center gap-2 rounded-md bg-slate-950/75 px-3 py-2 text-white backdrop-blur">
         <PlayCircle className="h-4 w-4 text-cyan-300" />
         <div className="truncate text-left">
-          <p className="truncate text-xs font-bold">{channel.speakerName}</p>
+          <p className="truncate text-xs font-bold">{channel.title}</p>
           <p className="truncate text-[11px] text-slate-300">
             {[youtubeEmbedUrl ? "YouTube" : videoLabel, channel.notes].filter(Boolean).join(" · ")}
           </p>

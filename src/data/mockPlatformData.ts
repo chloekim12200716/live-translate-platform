@@ -13,7 +13,6 @@ export interface PlatformChannel {
   id: string;
   title: string;
   slug: string;
-  speakerName: string;
   notes: string;
   sourceLanguageCode: string;
   videoUrl: string;
@@ -91,7 +90,6 @@ export const mockPlatformChannel: PlatformChannel = {
   id: "main-keynote",
   title: "실시간 의학행사 채널",
   slug: "main-keynote",
-  speakerName: "Dr. Robert C.",
   notes: "의학 학술행사 기본 테스트 채널",
   sourceLanguageCode: "en",
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",

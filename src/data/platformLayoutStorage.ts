@@ -87,12 +87,14 @@ function normalizeDisplay(display: PlatformDisplayTarget): PlatformDisplayTarget
   };
 }
 
-function normalizeChannel(channel: PlatformChannel & { speakerAffiliation?: string }): PlatformChannel {
+function normalizeChannel(channel: PlatformChannel & { speakerAffiliation?: string; speakerName?: string }): PlatformChannel {
+  const { speakerAffiliation: _speakerAffiliation, speakerName: _speakerName, ...channelWithoutSpeaker } = channel;
+
   return {
-    ...channel,
+    ...channelWithoutSpeaker,
     id: channel.id ?? channel.slug,
     slug: channel.slug ?? channel.id,
-    notes: channel.notes ?? channel.speakerAffiliation ?? "",
+    notes: channel.notes ?? _speakerAffiliation ?? "",
     mode: channel.mode ?? "live",
     slides: channel.slides ?? []
   };
