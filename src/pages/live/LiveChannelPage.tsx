@@ -3,7 +3,6 @@ import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import DisplayRenderer from "../../components/platform/DisplayRenderer";
 import {
   findPlatformChannelBySlug,
-  mockPlatformData,
   mockPlatformChannel,
   mockPlatformLayout,
   mockPlatformLayouts,
@@ -19,10 +18,10 @@ import {
 export default function LiveChannelPage() {
   const { channelSlug, languageCode } = useParams();
   const [searchParams] = useSearchParams();
-  const storedChannels = loadStoredPlatformChannels(mockPlatformData.event.id);
+  const storedChannels = loadStoredPlatformChannels();
   const channel = findPlatformChannelBySlug(channelSlug)
     ?? storedChannels.find((storedChannel) => storedChannel.slug === channelSlug);
-  const resolvedLanguage = languageCode ?? mockPlatformData.event.defaultLanguageCode;
+  const resolvedLanguage = languageCode ?? "ko";
   const shouldShowFullLayout = searchParams.get("view") === "full" || searchParams.get("overlay") === "none";
   const overlayMode = shouldShowFullLayout ? "none" : "caption";
   const audioParam = (searchParams.get("audio") ?? "").toLowerCase();

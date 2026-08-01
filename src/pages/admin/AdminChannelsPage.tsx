@@ -5,7 +5,6 @@ import {
   defaultCaptionStyle,
   mockPlatformChannel,
   mockPlatformChannels,
-  mockPlatformData,
   mockPlatformDisplays,
   mockPlatformLayout,
   mockPlatformLayouts,
@@ -116,7 +115,7 @@ function mergeStoredLayouts(channelSlug: string, displays: PlatformDisplayTarget
 }
 
 export default function AdminChannelsPage() {
-  const [customChannels, setCustomChannels] = useState(() => loadStoredPlatformChannels(mockPlatformData.event.id));
+  const [customChannels, setCustomChannels] = useState(() => loadStoredPlatformChannels());
   const allChannels = [...mockPlatformChannels, ...customChannels];
   const [selectedChannelId, setSelectedChannelId] = useState(mockPlatformChannel.id);
   const selectedChannel = allChannels.find((channel) => channel.id === selectedChannelId) ?? allChannels[0] ?? mockPlatformChannel;
@@ -187,7 +186,6 @@ export default function AdminChannelsPage() {
 
     const nextChannel: PlatformChannel = {
       id: slug,
-      eventId: mockPlatformData.event.id,
       title,
       slug,
       speakerName: newSpeakerName.trim() || "Speaker",
@@ -202,7 +200,7 @@ export default function AdminChannelsPage() {
     const defaultDisplay = createDefaultDisplay(nextChannel, defaultLayout.id);
     const nextChannels = [...customChannels, nextChannel];
 
-    saveStoredPlatformChannels(mockPlatformData.event.id, nextChannels);
+    saveStoredPlatformChannels(nextChannels);
     saveStoredLayout(nextChannel.slug, defaultLayout, defaultLayout.id);
     saveStoredPlatformDisplays(nextChannel.slug, [defaultDisplay]);
     setCustomChannels(nextChannels);
@@ -217,9 +215,9 @@ export default function AdminChannelsPage() {
     const channel = customChannels.find((customChannel) => customChannel.id === channelId);
     if (!channel) return;
 
-    deleteStoredPlatformChannel(mockPlatformData.event.id, channel.id);
+    deleteStoredPlatformChannel(channel.id);
     saveStoredPlatformDisplays(channel.slug, []);
-    const nextChannels = loadStoredPlatformChannels(mockPlatformData.event.id);
+    const nextChannels = loadStoredPlatformChannels();
     setCustomChannels(nextChannels);
     setSelectedChannelId(mockPlatformChannel.id);
   };
@@ -288,18 +286,12 @@ export default function AdminChannelsPage() {
         <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Channels</p>
         <h2 className="text-2xl font-bold text-slate-900">동시 송출 채널 관리</h2>
         <p className="mt-1 text-sm text-slate-500">
-          {mockPlatformData.event.name}에서 같은 날 운영할 여러 실시간 채널을 선택하고, 채널별 레이아웃·언어 URL·번역 테스트를 관리합니다.
+          동시에 운영할 실시간 채널을 선택하고, 채널별 레이아웃·언어 URL·번역 테스트를 관리합니다.
         </p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] font-bold uppercase text-slate-400">Event</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">{mockPlatformData.event.name}</p>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">{mockPlatformData.event.description}</p>
-          </div>
-
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Live Channels</p>

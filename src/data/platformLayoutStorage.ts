@@ -5,8 +5,11 @@ import {
   PlatformLayout
 } from "./mockPlatformData";
 
-export function getPlatformChannelsStorageKey(eventId: string) {
-  return `platformChannels:${eventId}`;
+const PLATFORM_CHANNELS_STORAGE_KEY = "platformChannels";
+const LEGACY_PLATFORM_CHANNELS_STORAGE_KEYS = ["platformChannels:event-medicast-2026"];
+
+export function getPlatformChannelsStorageKey() {
+  return PLATFORM_CHANNELS_STORAGE_KEY;
 }
 
 export function getPlatformLayoutStorageKey(channelSlug: string, layoutId: string) {
@@ -95,10 +98,13 @@ function normalizeChannel(channel: PlatformChannel & { speakerAffiliation?: stri
   };
 }
 
-export function loadStoredPlatformChannels(eventId: string): PlatformChannel[] {
+export function loadStoredPlatformChannels(): PlatformChannel[] {
   if (typeof window === "undefined") return [];
 
-  const rawChannels = window.localStorage.getItem(getPlatformChannelsStorageKey(eventId));
+  const rawChannels = window.localStorage.getItem(getPlatformChannelsStorageKey())
+    ?? LEGACY_PLATFORM_CHANNELS_STORAGE_KEYS
+      .map((storageKey) => window.localStorage.getItem(storageKey))
+      .find(Boolean);
   if (!rawChannels) return [];
 
   try {
@@ -112,13 +118,13 @@ export function loadStoredPlatformChannels(eventId: string): PlatformChannel[] {
   }
 }
 
-export function saveStoredPlatformChannels(eventId: string, channels: PlatformChannel[]) {
-  window.localStorage.setItem(getPlatformChannelsStorageKey(eventId), JSON.stringify(channels.map(normalizeChannel)));
+export function saveStoredPlatformChannels(channels: PlatformChannel[]) {
+  window.localStorage.setItem(getPlatformChannelsStorageKey(), JSON.stringify(channels.map(normalizeChannel)));
 }
 
-export function deleteStoredPlatformChannel(eventId: string, channelId: string) {
-  const channels = loadStoredPlatformChannels(eventId);
-  saveStoredPlatformChannels(eventId, channels.filter((channel) => channel.id !== channelId));
+export function deleteStoredPlatformChannel(channelId: string) {
+  const channels = loadStoredPlatformChannels();
+  saveStoredPlatformChannels(channels.filter((channel) => channel.id !== channelId));
 }
 
 export function loadStoredPlatformDisplays(channelSlug: string): PlatformDisplayTarget[] {

@@ -15,7 +15,6 @@ import {
   mockPlatformLayouts,
   mockPlatformDisplays,
   mockPlatformChannel,
-  mockPlatformData,
   PlatformComponentType,
   PlatformDisplayTarget,
   PlatformLayout,
@@ -55,7 +54,7 @@ function toSlug(value: string) {
 export default function ChannelLayoutEditorPage() {
   const { channelId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const storedChannels = loadStoredPlatformChannels(mockPlatformData.event.id);
+  const storedChannels = loadStoredPlatformChannels();
   const selectedChannel = findPlatformChannelById(channelId)
     ?? storedChannels.find((channel) => channel.id === channelId);
   const isKnownChannel = Boolean(selectedChannel);
@@ -604,7 +603,7 @@ export default function ChannelLayoutEditorPage() {
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           {[
-            { label: "행사/채널 생성", icon: Clapperboard },
+            { label: "채널 생성", icon: Clapperboard },
             { label: "화면 템플릿 선택", icon: Image },
             { label: "컴포넌트 배치", icon: Grid3X3 },
             { label: "실시간 송출 시작", icon: Radio }
@@ -698,7 +697,7 @@ export default function ChannelLayoutEditorPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-black text-slate-900">한눈에 보는 흐름</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-5">
-            {["행사/채널 생성", "템플릿 선택", "컴포넌트 배치", "저장 및 미리보기", "실시간 송출"].map((item, index) => (
+            {["채널 생성", "템플릿 선택", "컴포넌트 배치", "저장 및 미리보기", "실시간 송출"].map((item, index) => (
               <div key={item} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
                 <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-sm font-black text-indigo-700">
                   {index + 1}
@@ -712,7 +711,7 @@ export default function ChannelLayoutEditorPage() {
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-sm leading-relaxed text-emerald-950 shadow-sm">
           <h3 className="text-sm font-black">실제 운영 예시</h3>
           <p className="mt-2">
-            한 행사에서 여러 채널을 동시에 운영할 때, 채널마다 다른 레이아웃과 자막 스트림을 적용하고
+            여러 채널을 동시에 운영할 때, 채널마다 다른 레이아웃과 자막 스트림을 적용하고
             각 언어 URL을 독립적으로 송출할 수 있습니다.
           </p>
         </div>
