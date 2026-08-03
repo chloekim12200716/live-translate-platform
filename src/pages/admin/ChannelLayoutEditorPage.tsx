@@ -43,6 +43,7 @@ import {
 
 const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
 const MAX_BACKGROUND_IMAGE_BYTES = 2 * 1024 * 1024;
+const supportedBackgroundImageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 function toSlug(value: string) {
   return value
@@ -329,12 +330,14 @@ export default function ChannelLayoutEditorPage() {
   };
 
   const handleNumberChange = (field: "x" | "y" | "w" | "h", value: string) => {
-    updateSelectedComponent({ [field]: Number(value) });
+    const nextValue = Number(value);
+    if (!Number.isFinite(nextValue)) return;
+    updateSelectedComponent({ [field]: nextValue });
   };
 
   const applyBackgroundFile = (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setEditorErrorMessage("이미지 파일만 배경으로 사용할 수 있습니다.");
+    if (!supportedBackgroundImageTypes.has(file.type)) {
+      setEditorErrorMessage("PNG, JPG, WEBP, GIF 이미지만 배경으로 사용할 수 있습니다.");
       return;
     }
     if (file.size > MAX_BACKGROUND_IMAGE_BYTES) {
@@ -666,7 +669,7 @@ export default function ChannelLayoutEditorPage() {
               배경 이미지 선택
               <input
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp,image/gif"
                 onChange={handleBackgroundFileChange}
                 className="sr-only"
               />

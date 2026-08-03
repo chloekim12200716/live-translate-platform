@@ -115,6 +115,13 @@ function mergeStoredLayouts(channelSlug: string, displays: PlatformDisplayTarget
   ];
 }
 
+async function parseAdminJsonResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    throw new Error(`Admin request failed: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 export default function AdminChannelsPage() {
   const [customChannels, setCustomChannels] = useState(() => loadStoredPlatformChannels());
   const allChannels = [...mockPlatformChannels, ...customChannels];
@@ -154,14 +161,14 @@ export default function AdminChannelsPage() {
 
   const loadTranslationErrors = () => {
     adminFetch("/api/translation-errors?limit=5")
-      .then((response) => response.json())
+      .then((response) => parseAdminJsonResponse<{ errors?: TranslationErrorLog[] }>(response))
       .then((data: { errors?: TranslationErrorLog[] }) => setTranslationErrors(data.errors ?? []))
       .catch(() => setTranslationErrors([]));
   };
 
   const loadTranscriptDocuments = () => {
     adminFetch(`/api/captions/transcripts?channelSlug=${encodeURIComponent(selectedChannel.slug)}&limit=5`)
-      .then((response) => response.json())
+      .then((response) => parseAdminJsonResponse<{ documents?: TranscriptDocumentSummary[] }>(response))
       .then((data: { documents?: TranscriptDocumentSummary[] }) => setTranscriptDocuments(data.documents ?? []))
       .catch(() => setTranscriptDocuments([]));
   };

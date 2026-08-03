@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { createServer as createHttpServer, type Server as HttpServer } from "http";
@@ -25,6 +26,8 @@ const GEMINI_LIVE_API_VERSION = process.env.GEMINI_LIVE_API_VERSION || "v1alpha"
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
 const MAX_CAPTION_TEXT_LENGTH = Number(process.env.MAX_CAPTION_TEXT_LENGTH || 5000);
+const MAX_SHORT_INPUT_LENGTH = 120;
+const MAX_MEDIUM_INPUT_LENGTH = 1000;
 const MAX_LIVE_AUDIO_FRAME_BYTES = Number(process.env.MAX_LIVE_AUDIO_FRAME_BYTES || 262144);
 const MAX_LIVE_TARGET_LANGUAGE_COUNT = Number(process.env.MAX_LIVE_TARGET_LANGUAGE_COUNT || 7);
 const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || "ar,zh,en,fr,ko,ru,es")
@@ -41,13 +44,21 @@ function getAdminTokenFromRequest(req: express.Request) {
   return typeof req.query.adminToken === "string" ? req.query.adminToken : "";
 }
 
+function hasValidAdminToken(token: string) {
+  if (!ADMIN_API_TOKEN || !token) return false;
+
+  const expectedToken = Buffer.from(ADMIN_API_TOKEN);
+  const providedToken = Buffer.from(token);
+  return providedToken.length === expectedToken.length && crypto.timingSafeEqual(providedToken, expectedToken);
+}
+
 function requireAdminAccess(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!ADMIN_API_TOKEN) {
     next();
     return;
   }
 
-  if (getAdminTokenFromRequest(req) === ADMIN_API_TOKEN) {
+  if (hasValidAdminToken(getAdminTokenFromRequest(req))) {
     next();
     return;
   }
@@ -57,7 +68,7 @@ function requireAdminAccess(req: express.Request, res: express.Response, next: e
 
 function hasValidAdminTokenForUrl(requestUrl: URL) {
   if (!ADMIN_API_TOKEN) return true;
-  return requestUrl.searchParams.get("adminToken") === ADMIN_API_TOKEN;
+  return hasValidAdminToken(requestUrl.searchParams.get("adminToken") ?? "");
 }
 
 function normalizeLiveTargetLanguageCode(languageCode: string) {
@@ -584,6 +595,26 @@ function getStringValue(value: unknown, fallback: string) {
   return typeof value === "string" ? value : fallback;
 }
 
+function getBoundedString(value: unknown, fallback = "", maxLength = MAX_MEDIUM_INPUT_LENGTH) {
+  if (typeof value !== "string") return fallback;
+  return value.trim().slice(0, maxLength);
+}
+
+function getFiniteNumber(value: unknown, fallback = 0) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function getBooleanValue(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function getSupportedLiveLanguage(value: unknown, fallback = "en") {
+  if (typeof value !== "string") return fallback;
+  const normalizedLanguageCode = normalizeLiveTargetLanguageCode(value);
+  return SUPPORTED_LIVE_TARGET_LANGUAGES.has(normalizedLanguageCode) ? normalizedLanguageCode : fallback;
+}
+
 function getCaptionChannelSlugFromQuery(query: Record<string, unknown>, fallback = "main-keynote") {
   return getStringValue(query.channelSlug, fallback);
 }
@@ -808,7 +839,23 @@ app.get("/api/state", (req, res) => {
 });
 
 app.post("/api/state", requireAdminAccess, (req, res) => {
-  appState = { ...appState, ...req.body };
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const nextState = { ...appState };
+  const broadcastMode = getBoundedString(body.broadcastMode, "", MAX_SHORT_INPUT_LENGTH);
+  const speakerLang = getBoundedString(body.speakerLang, "", MAX_SHORT_INPUT_LENGTH);
+  const outputLang = getBoundedString(body.outputLang, "", MAX_SHORT_INPUT_LENGTH);
+  const layout = getBoundedString(body.layout, "", MAX_SHORT_INPUT_LENGTH);
+
+  if (["live", "vod"].includes(broadcastMode)) nextState.broadcastMode = broadcastMode;
+  if (["en", "ko"].includes(speakerLang)) nextState.speakerLang = speakerLang;
+  if (["ko", "en", "both"].includes(outputLang)) nextState.outputLang = outputLang;
+  if (typeof body.isCapturing === "boolean") nextState.isCapturing = body.isCapturing;
+  if (["split", "speaker", "slide"].includes(layout)) nextState.layout = layout;
+  if (Object.prototype.hasOwnProperty.call(body, "currentVideoTime")) {
+    nextState.currentVideoTime = Math.max(0, getFiniteNumber(body.currentVideoTime, nextState.currentVideoTime));
+  }
+
+  appState = nextState;
   res.json({ status: "success", state: appState });
 });
 
@@ -817,22 +864,31 @@ app.get("/api/dictionary", (req, res) => {
 });
 
 app.post("/api/dictionary", requireAdminAccess, (req, res) => {
-  const { term, definition, category } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const term = getBoundedString(body.term, "", MAX_SHORT_INPUT_LENGTH);
+  const definition = getBoundedString(body.definition, "", MAX_MEDIUM_INPUT_LENGTH);
+  const category = getBoundedString(body.category, "기타", MAX_SHORT_INPUT_LENGTH) || "기타";
   if (!term || !definition) {
     return res.status(400).json({ error: "Term and Definition are required" });
   }
   const existingIndex = medicalDictionary.findIndex(item => item.term.toLowerCase() === term.toLowerCase());
   if (existingIndex > -1) {
-    medicalDictionary[existingIndex] = { term, definition, category: category || "기타" };
+    medicalDictionary[existingIndex] = { term, definition, category };
   } else {
-    medicalDictionary.push({ term, definition, category: category || "기타" });
+    medicalDictionary.push({ term, definition, category });
   }
   res.json({ status: "success", dictionary: medicalDictionary });
 });
 
 // Update single subtitle
 app.post("/api/subtitles/update", requireAdminAccess, (req, res) => {
-  const { id, original, translated } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const id = getBoundedString(body.id, "", MAX_SHORT_INPUT_LENGTH);
+  const original = getBoundedString(body.original, "", MAX_CAPTION_TEXT_LENGTH);
+  const translated = getBoundedString(body.translated, "", MAX_CAPTION_TEXT_LENGTH);
+  if (!id) {
+    return res.status(400).json({ error: "Subtitle id is required" });
+  }
   const subIndex = appState.subtitles.findIndex(s => s.id === id);
   if (subIndex > -1) {
     appState.subtitles[subIndex].original = original;
@@ -846,14 +902,19 @@ app.post("/api/subtitles/update", requireAdminAccess, (req, res) => {
 
 // Add new subtitle
 app.post("/api/subtitles/add", requireAdminAccess, (req, res) => {
-  const { original, translated, timestamp, speaker, isFinal } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const original = getBoundedString(body.original, "", MAX_CAPTION_TEXT_LENGTH);
+  const translated = getBoundedString(body.translated, "", MAX_CAPTION_TEXT_LENGTH);
+  if (!original && !translated) {
+    return res.status(400).json({ error: "original or translated text is required" });
+  }
   const newSub: Subtitle = {
     id: `sub-${Date.now()}`,
-    timestamp: timestamp || 0,
-    speaker: speaker || "Speaker",
-    original: original || "",
-    translated: translated || "",
-    isFinal: isFinal !== undefined ? isFinal : true
+    timestamp: Math.max(0, getFiniteNumber(body.timestamp, 0)),
+    speaker: getBoundedString(body.speaker, "Speaker", MAX_SHORT_INPUT_LENGTH) || "Speaker",
+    original,
+    translated,
+    isFinal: getBooleanValue(body.isFinal, true)
   };
   appState.subtitles.push(newSub);
   res.json({ status: "success", subtitle: newSub });
@@ -867,11 +928,15 @@ app.post("/api/subtitles/clear", requireAdminAccess, (req, res) => {
 
 // Q&A actions
 app.post("/api/qa", requireAdminAccess, (req, res) => {
-  const { user, text } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const text = getBoundedString(body.text, "", MAX_MEDIUM_INPUT_LENGTH);
+  if (!text) {
+    return res.status(400).json({ error: "Question text is required" });
+  }
   const newQA: QAItem = {
     id: `qa-${Date.now()}`,
-    user: user || "Anonymous",
-    text: text,
+    user: getBoundedString(body.user, "Anonymous", MAX_SHORT_INPUT_LENGTH) || "Anonymous",
+    text,
     timestamp: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
     isAnswered: false
   };
@@ -880,7 +945,12 @@ app.post("/api/qa", requireAdminAccess, (req, res) => {
 });
 
 app.post("/api/qa/answer", requireAdminAccess, (req, res) => {
-  const { id, answer } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const id = getBoundedString(body.id, "", MAX_SHORT_INPUT_LENGTH);
+  const answer = getBoundedString(body.answer, "", MAX_MEDIUM_INPUT_LENGTH);
+  if (!id || !answer) {
+    return res.status(400).json({ error: "Q&A id and answer are required" });
+  }
   const qaIndex = appState.qaList.findIndex(q => q.id === id);
   if (qaIndex > -1) {
     appState.qaList[qaIndex].isAnswered = true;
@@ -893,7 +963,9 @@ app.post("/api/qa/answer", requireAdminAccess, (req, res) => {
 
 // Bookmarks & Notes
 app.post("/api/bookmarks", requireAdminAccess, (req, res) => {
-  const { timestamp, title } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const timestamp = Math.max(0, getFiniteNumber(body.timestamp, 0));
+  const title = getBoundedString(body.title, "", MAX_SHORT_INPUT_LENGTH);
   const newBm: Bookmark = {
     id: `bm-${Date.now()}`,
     timestamp,
@@ -904,16 +976,24 @@ app.post("/api/bookmarks", requireAdminAccess, (req, res) => {
 });
 
 app.post("/api/bookmarks/delete", requireAdminAccess, (req, res) => {
-  const { id } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const id = getBoundedString(body.id, "", MAX_SHORT_INPUT_LENGTH);
+  if (!id) {
+    return res.status(400).json({ error: "Bookmark id is required" });
+  }
   appState.bookmarks = appState.bookmarks.filter(b => b.id !== id);
   res.json({ status: "success", bookmarks: appState.bookmarks });
 });
 
 app.post("/api/notes", requireAdminAccess, (req, res) => {
-  const { timestamp, text } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const text = getBoundedString(body.text, "", MAX_MEDIUM_INPUT_LENGTH);
+  if (!text) {
+    return res.status(400).json({ error: "Note text is required" });
+  }
   const newNote: Note = {
     id: `nt-${Date.now()}`,
-    timestamp,
+    timestamp: Math.max(0, getFiniteNumber(body.timestamp, 0)),
     text
   };
   appState.notes.push(newNote);
@@ -921,7 +1001,11 @@ app.post("/api/notes", requireAdminAccess, (req, res) => {
 });
 
 app.post("/api/notes/delete", requireAdminAccess, (req, res) => {
-  const { id } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  const id = getBoundedString(body.id, "", MAX_SHORT_INPUT_LENGTH);
+  if (!id) {
+    return res.status(400).json({ error: "Note id is required" });
+  }
   appState.notes = appState.notes.filter(n => n.id !== id);
   res.json({ status: "success", notes: appState.notes });
 });
@@ -1050,31 +1134,32 @@ app.get("/api/captions/transcripts", requireAdminAccess, (req, res) => {
 });
 
 app.post("/api/captions/publish", requireAdminAccess, (req, res) => {
-  const {
-    channelSlug,
-    timestamp,
-    speaker,
-    text,
-    sourceLang,
-    targetLang,
-    isFinal
-  } = req.body;
+  const body = typeof req.body === "object" && req.body !== null ? req.body as Record<string, unknown> : {};
+  if (typeof body.text !== "string") {
+    return res.status(400).json({ error: "text is required" });
+  }
+  const text = body.text.trim();
+  const rawTargetLang = typeof body.targetLang === "string" ? body.targetLang.trim() : "";
+  const targetLang = rawTargetLang ? normalizeLiveTargetLanguageCode(rawTargetLang) : undefined;
 
-  if (!text || typeof text !== "string") {
+  if (!text) {
     return res.status(400).json({ error: "text is required" });
   }
   if (text.length > MAX_CAPTION_TEXT_LENGTH) {
     return res.status(413).json({ error: `text exceeds ${MAX_CAPTION_TEXT_LENGTH} characters` });
   }
+  if (targetLang && !SUPPORTED_LIVE_TARGET_LANGUAGES.has(targetLang)) {
+    return res.status(400).json({ error: "targetLang is not supported" });
+  }
 
   const segment = createLiveCaptionSegment({
-    channelSlug: getCaptionChannelSlugFromBody({ channelSlug }),
-    targetLang: typeof targetLang === "string" ? targetLang : undefined,
-    timestamp,
-    speaker,
+    channelSlug: getCaptionChannelSlugFromBody({ channelSlug: getBoundedString(body.channelSlug, "main-keynote", MAX_SHORT_INPUT_LENGTH) }),
+    targetLang,
+    timestamp: Math.max(0, getFiniteNumber(body.timestamp, 0)),
+    speaker: getBoundedString(body.speaker, "Speaker", MAX_SHORT_INPUT_LENGTH) || "Speaker",
     text,
-    sourceLang,
-    isFinal
+    sourceLang: getSupportedLiveLanguage(body.sourceLang, "en"),
+    isFinal: getBooleanValue(body.isFinal, true)
   });
 
   publishLiveCaption(segment);
