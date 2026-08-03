@@ -571,7 +571,7 @@ export default function AdminChannelsPage() {
                         to={`/live/${selectedChannel.slug}/${display.defaultLanguageCode}?layoutId=${display.layoutId}`}
                         className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-slate-700 hover:bg-slate-100"
                       >
-                        자막 화면
+                        미리보기
                       </Link>
                       {isCustomDisplay && (
                         <button
