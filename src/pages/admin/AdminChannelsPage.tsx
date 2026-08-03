@@ -14,6 +14,7 @@ import {
   PlatformLayout
 } from "../../data/mockPlatformData";
 import {
+  clearStoredLayout,
   deleteStoredPlatformChannel,
   deleteStoredPlatformDisplay,
   loadStoredPlatformChannels,
@@ -51,7 +52,6 @@ interface TranscriptDocumentSummary {
   startedAt: string;
   endedAt?: string;
   entries: Array<{ id: string; sequence: number; text: string }>;
-  filePath?: string;
 }
 
 function toSlug(value: string) {
@@ -130,6 +130,8 @@ export default function AdminChannelsPage() {
   const [newDefaultLanguageCode, setNewDefaultLanguageCode] = useState("ko");
   const [translationErrors, setTranslationErrors] = useState<TranslationErrorLog[]>([]);
   const [transcriptDocuments, setTranscriptDocuments] = useState<TranscriptDocumentSummary[]>([]);
+  const [adminErrorMessage, setAdminErrorMessage] = useState("");
+  const [adminStatusMessage, setAdminStatusMessage] = useState("");
   const mockDisplaysForChannel = mockPlatformDisplays.filter((display) => display.channelId === selectedChannel.id);
   const allPlatformDisplays = [...mockDisplaysForChannel, ...customDisplays];
   const selectedDisplay = allPlatformDisplays.find((display) => display.id === selectedDisplayId) ?? allPlatformDisplays[0];
@@ -181,7 +183,11 @@ export default function AdminChannelsPage() {
     if (!title) return;
 
     const slug = toSlug(newChannelSlug || title);
-    if (allChannels.some((channel) => channel.slug === slug || channel.id === slug)) return;
+    if (allChannels.some((channel) => channel.slug === slug || channel.id === slug)) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(`이미 사용 중인 채널 slug입니다: ${slug}`);
+      return;
+    }
 
     const nextChannel: PlatformChannel = {
       id: slug,
@@ -198,25 +204,42 @@ export default function AdminChannelsPage() {
     const defaultDisplay = createDefaultDisplay(nextChannel, defaultLayout.id);
     const nextChannels = [...customChannels, nextChannel];
 
-    saveStoredPlatformChannels(nextChannels);
-    saveStoredLayout(nextChannel.slug, defaultLayout, defaultLayout.id);
-    saveStoredPlatformDisplays(nextChannel.slug, [defaultDisplay]);
-    setCustomChannels(nextChannels);
-    setSelectedChannelId(nextChannel.id);
-    setNewChannelTitle("");
-    setNewChannelSlug("");
-    setNewChannelNotes("");
+    try {
+      saveStoredPlatformChannels(nextChannels);
+      saveStoredLayout(nextChannel.slug, defaultLayout, defaultLayout.id);
+      saveStoredPlatformDisplays(nextChannel.slug, [defaultDisplay]);
+      setCustomChannels(nextChannels);
+      setSelectedChannelId(nextChannel.id);
+      setNewChannelTitle("");
+      setNewChannelSlug("");
+      setNewChannelNotes("");
+      setAdminErrorMessage("");
+      setAdminStatusMessage("채널을 추가했습니다.");
+    } catch (error) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(error instanceof Error ? error.message : "채널 저장에 실패했습니다.");
+    }
   };
 
   const handleDeleteChannel = (channelId: string) => {
     const channel = customChannels.find((customChannel) => customChannel.id === channelId);
     if (!channel) return;
 
-    deleteStoredPlatformChannel(channel.id);
-    saveStoredPlatformDisplays(channel.slug, []);
-    const nextChannels = loadStoredPlatformChannels();
-    setCustomChannels(nextChannels);
-    setSelectedChannelId(mockPlatformChannel.id);
+    try {
+      loadStoredPlatformDisplays(channel.slug).forEach((display) => {
+        clearStoredLayout(channel.slug, display.layoutId);
+      });
+      deleteStoredPlatformChannel(channel.id);
+      saveStoredPlatformDisplays(channel.slug, []);
+      const nextChannels = loadStoredPlatformChannels();
+      setCustomChannels(nextChannels);
+      setSelectedChannelId(mockPlatformChannel.id);
+      setAdminErrorMessage("");
+      setAdminStatusMessage("채널을 삭제했습니다.");
+    } catch (error) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(error instanceof Error ? error.message : "채널 삭제에 실패했습니다.");
+    }
   };
 
   const handleAddPlatformDisplay = (event: React.FormEvent<HTMLFormElement>) => {
@@ -246,22 +269,36 @@ export default function AdminChannelsPage() {
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
-    saveStoredLayout(selectedChannel.slug, nextLayout, layoutId);
-    saveStoredPlatformDisplays(selectedChannel.slug, nextDisplays);
-    setCustomDisplays(nextDisplays);
-    setSelectedDisplayId(nextDisplay.id);
-    setNewDisplayName("");
-    setNewDisplayDescription("");
-    setNewTemplateLayoutId(mockPlatformLayout.id);
-    setNewDefaultLanguageCode("ko");
+    try {
+      saveStoredLayout(selectedChannel.slug, nextLayout, layoutId);
+      saveStoredPlatformDisplays(selectedChannel.slug, nextDisplays);
+      setCustomDisplays(nextDisplays);
+      setSelectedDisplayId(nextDisplay.id);
+      setNewDisplayName("");
+      setNewDisplayDescription("");
+      setNewTemplateLayoutId(mockPlatformLayout.id);
+      setNewDefaultLanguageCode("ko");
+      setAdminErrorMessage("");
+      setAdminStatusMessage("레이아웃을 추가했습니다.");
+    } catch (error) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(error instanceof Error ? error.message : "레이아웃 저장에 실패했습니다.");
+    }
   };
 
   const handleDeletePlatformDisplay = (displayId: string) => {
-    deleteStoredPlatformDisplay(selectedChannel.slug, displayId);
-    const nextDisplays = loadStoredPlatformDisplays(selectedChannel.slug);
-    setCustomDisplays(nextDisplays);
-    if (selectedDisplayId === displayId) {
-      setSelectedDisplayId(mockDisplaysForChannel[0]?.id ?? nextDisplays[0]?.id ?? "");
+    try {
+      deleteStoredPlatformDisplay(selectedChannel.slug, displayId);
+      const nextDisplays = loadStoredPlatformDisplays(selectedChannel.slug);
+      setCustomDisplays(nextDisplays);
+      if (selectedDisplayId === displayId) {
+        setSelectedDisplayId(mockDisplaysForChannel[0]?.id ?? nextDisplays[0]?.id ?? "");
+      }
+      setAdminErrorMessage("");
+      setAdminStatusMessage("레이아웃을 삭제했습니다.");
+    } catch (error) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(error instanceof Error ? error.message : "레이아웃 삭제에 실패했습니다.");
     }
   };
 
@@ -286,6 +323,16 @@ export default function AdminChannelsPage() {
           동시에 운영할 실시간 채널을 선택하고, 채널별 레이아웃·언어 URL·번역 테스트를 관리합니다.
         </p>
       </div>
+
+      {(adminErrorMessage || adminStatusMessage) && (
+        <div className={`rounded-xl border p-3 text-sm font-semibold ${
+          adminErrorMessage
+            ? "border-rose-200 bg-rose-50 text-rose-800"
+            : "border-emerald-200 bg-emerald-50 text-emerald-800"
+        }`}>
+          {adminErrorMessage || adminStatusMessage}
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="space-y-4">
@@ -622,9 +669,6 @@ export default function AdminChannelsPage() {
                         {new Date(document.endedAt ?? document.startedAt).toLocaleString("ko-KR")}
                       </time>
                     </div>
-                    {document.filePath && (
-                      <p className="mt-2 break-all font-mono text-[11px] text-emerald-800">{document.filePath}</p>
-                    )}
                     <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-700">
                       {document.entries.at(-1)?.text ?? "저장된 문장이 없습니다."}
                     </p>

@@ -42,6 +42,7 @@ import {
 } from "../../utils/layoutEditor";
 
 const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
+const MAX_BACKGROUND_IMAGE_BYTES = 2 * 1024 * 1024;
 
 function toSlug(value: string) {
   return value
@@ -81,6 +82,7 @@ export default function ChannelLayoutEditorPage() {
   const [layout, setLayout] = useState(() => loadStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [editorErrorMessage, setEditorErrorMessage] = useState("");
   const [isBackgroundDragActive, setIsBackgroundDragActive] = useState(false);
   const [draggingComponentId, setDraggingComponentId] = useState<string | null>(null);
   const [resizingComponentId, setResizingComponentId] = useState<string | null>(null);
@@ -151,13 +153,18 @@ export default function ChannelLayoutEditorPage() {
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
-    saveStoredLayout(channel.slug, nextLayout, layoutId);
-    saveStoredPlatformDisplays(channel.slug, nextDisplays);
-    setCustomDisplays(nextDisplays);
-    setNewDisplayName("");
-    setNewDisplayDescription("");
-    setNewDefaultLanguageCode("en");
-    setSearchParams({ layoutId });
+    try {
+      saveStoredLayout(channel.slug, nextLayout, layoutId);
+      saveStoredPlatformDisplays(channel.slug, nextDisplays);
+      setCustomDisplays(nextDisplays);
+      setNewDisplayName("");
+      setNewDisplayDescription("");
+      setNewDefaultLanguageCode("en");
+      setEditorErrorMessage("");
+      setSearchParams({ layoutId });
+    } catch (error) {
+      setEditorErrorMessage(error instanceof Error ? error.message : "레이아웃 저장에 실패했습니다.");
+    }
   };
 
   const updateComponent = (componentId: string, updates: Partial<PlatformLayoutComponent>) => {
@@ -180,7 +187,7 @@ export default function ChannelLayoutEditorPage() {
           label: updates.type ? componentDisplayName(updates.type) : nextComponent.label,
           captionStyle: nextComponent.type === "caption"
             ? { ...defaultCaptionStyle, ...nextComponent.captionStyle }
-            : nextComponent.captionStyle
+            : undefined
         };
       });
 
@@ -326,7 +333,14 @@ export default function ChannelLayoutEditorPage() {
   };
 
   const applyBackgroundFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      setEditorErrorMessage("이미지 파일만 배경으로 사용할 수 있습니다.");
+      return;
+    }
+    if (file.size > MAX_BACKGROUND_IMAGE_BYTES) {
+      setEditorErrorMessage("배경 이미지는 2MB 이하 파일만 사용할 수 있습니다.");
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -335,7 +349,10 @@ export default function ChannelLayoutEditorPage() {
         ...currentLayout,
         backgroundImageUrl: reader.result
       }));
+      setEditorErrorMessage("");
     };
+    reader.onerror = () => setEditorErrorMessage("배경 이미지 파일을 읽지 못했습니다.");
+    reader.onabort = () => setEditorErrorMessage("배경 이미지 파일 읽기가 취소되었습니다.");
     reader.readAsDataURL(file);
   };
 
@@ -354,21 +371,31 @@ export default function ChannelLayoutEditorPage() {
   };
 
   const handleSaveLayout = () => {
-    saveStoredLayout(channel.slug, layout, selectedBaseLayout.id);
-    setSavedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    try {
+      saveStoredLayout(channel.slug, layout, selectedBaseLayout.id);
+      setSavedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setEditorErrorMessage("");
+    } catch (error) {
+      setEditorErrorMessage(error instanceof Error ? error.message : "레이아웃 저장에 실패했습니다.");
+    }
   };
 
   const handleResetLayout = () => {
-    const isMockLayout = mockLayoutsForChannel.some((baseLayout) => baseLayout.id === selectedBaseLayout.id);
-    if (isMockLayout) {
-      clearStoredLayout(channel.slug, selectedBaseLayout.id);
-    } else {
-      saveStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id);
-    }
+    try {
+      const isMockLayout = mockLayoutsForChannel.some((baseLayout) => baseLayout.id === selectedBaseLayout.id);
+      if (isMockLayout) {
+        clearStoredLayout(channel.slug, selectedBaseLayout.id);
+      } else {
+        saveStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id);
+      }
 
-    setLayout(selectedBaseLayout);
-    setSelectedComponentId(selectedBaseLayout.components[0]?.id ?? "");
-    setSavedAt(null);
+      setLayout(selectedBaseLayout);
+      setSelectedComponentId(selectedBaseLayout.components[0]?.id ?? "");
+      setSavedAt(null);
+      setEditorErrorMessage("");
+    } catch (error) {
+      setEditorErrorMessage(error instanceof Error ? error.message : "레이아웃 복원에 실패했습니다.");
+    }
   };
 
   const handleAddComponent = (type: PlatformComponentType) => {
@@ -509,6 +536,12 @@ export default function ChannelLayoutEditorPage() {
           </div>
         </div>
       </div>
+
+      {editorErrorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+          {editorErrorMessage}
+        </div>
+      )}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">

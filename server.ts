@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 // Initialize Gemini SDK with fallback
 let aiClient: GoogleGenAI | null = null;
@@ -23,10 +23,55 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.5-live-translate-preview";
 const GEMINI_LIVE_API_VERSION = process.env.GEMINI_LIVE_API_VERSION || "v1alpha";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
+const MAX_TRANSLATION_TEXT_LENGTH = Number(process.env.MAX_TRANSLATION_TEXT_LENGTH || 10000);
+const MAX_CAPTION_TEXT_LENGTH = Number(process.env.MAX_CAPTION_TEXT_LENGTH || 5000);
+const MAX_LIVE_AUDIO_FRAME_BYTES = Number(process.env.MAX_LIVE_AUDIO_FRAME_BYTES || 262144);
+const MAX_LIVE_TEXT_FRAME_CHARS = Number(process.env.MAX_LIVE_TEXT_FRAME_CHARS || 5000);
+const MAX_LIVE_TARGET_LANGUAGE_COUNT = Number(process.env.MAX_LIVE_TARGET_LANGUAGE_COUNT || 7);
 const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || "ar,zh,en,fr,ko,ru,es")
   .split(",")
   .map((languageCode) => languageCode.trim().toLowerCase())
   .filter(Boolean);
+const SUPPORTED_LIVE_TARGET_LANGUAGES = new Set(["ar", "zh", "en", "fr", "ko", "ru", "es"]);
+
+function getAdminTokenFromRequest(req: express.Request) {
+  const headerToken = req.header("x-admin-token");
+  const authorization = req.header("authorization");
+  if (headerToken) return headerToken;
+  if (authorization?.startsWith("Bearer ")) return authorization.slice("Bearer ".length).trim();
+  return typeof req.query.adminToken === "string" ? req.query.adminToken : "";
+}
+
+function requireAdminAccess(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!ADMIN_API_TOKEN) {
+    next();
+    return;
+  }
+
+  if (getAdminTokenFromRequest(req) === ADMIN_API_TOKEN) {
+    next();
+    return;
+  }
+
+  res.status(401).json({ error: "Unauthorized" });
+}
+
+function hasValidAdminTokenForUrl(requestUrl: URL) {
+  if (!ADMIN_API_TOKEN) return true;
+  return requestUrl.searchParams.get("adminToken") === ADMIN_API_TOKEN;
+}
+
+function normalizeLiveTargetLanguageCode(languageCode: string) {
+  const normalizedLanguageCode = languageCode.trim().toLowerCase();
+  if (normalizedLanguageCode === "zh-cn" || normalizedLanguageCode === "zh-hans") return "zh";
+  if (normalizedLanguageCode === "en-us") return "en";
+  if (normalizedLanguageCode === "fr-fr") return "fr";
+  if (normalizedLanguageCode === "ko-kr") return "ko";
+  if (normalizedLanguageCode === "ru-ru") return "ru";
+  if (normalizedLanguageCode === "es-es") return "es";
+  return normalizedLanguageCode.split("-")[0] || "";
+}
 
 const translationLanguageLabels: Record<string, string> = {
   ar: "Arabic",
@@ -917,7 +962,7 @@ app.get("/api/state", (req, res) => {
   res.json(appState);
 });
 
-app.post("/api/state", (req, res) => {
+app.post("/api/state", requireAdminAccess, (req, res) => {
   appState = { ...appState, ...req.body };
   res.json({ status: "success", state: appState });
 });
@@ -926,7 +971,7 @@ app.get("/api/dictionary", (req, res) => {
   res.json(medicalDictionary);
 });
 
-app.post("/api/dictionary", (req, res) => {
+app.post("/api/dictionary", requireAdminAccess, (req, res) => {
   const { term, definition, category } = req.body;
   if (!term || !definition) {
     return res.status(400).json({ error: "Term and Definition are required" });
@@ -941,7 +986,7 @@ app.post("/api/dictionary", (req, res) => {
 });
 
 // Update single subtitle
-app.post("/api/subtitles/update", (req, res) => {
+app.post("/api/subtitles/update", requireAdminAccess, (req, res) => {
   const { id, original, translated } = req.body;
   const subIndex = appState.subtitles.findIndex(s => s.id === id);
   if (subIndex > -1) {
@@ -955,7 +1000,7 @@ app.post("/api/subtitles/update", (req, res) => {
 });
 
 // Add new subtitle
-app.post("/api/subtitles/add", (req, res) => {
+app.post("/api/subtitles/add", requireAdminAccess, (req, res) => {
   const { original, translated, timestamp, speaker, isFinal } = req.body;
   const newSub: Subtitle = {
     id: `sub-${Date.now()}`,
@@ -970,13 +1015,13 @@ app.post("/api/subtitles/add", (req, res) => {
 });
 
 // Clear subtitles
-app.post("/api/subtitles/clear", (req, res) => {
+app.post("/api/subtitles/clear", requireAdminAccess, (req, res) => {
   appState.subtitles = [];
   res.json({ status: "success", subtitles: [] });
 });
 
 // Q&A actions
-app.post("/api/qa", (req, res) => {
+app.post("/api/qa", requireAdminAccess, (req, res) => {
   const { user, text } = req.body;
   const newQA: QAItem = {
     id: `qa-${Date.now()}`,
@@ -989,7 +1034,7 @@ app.post("/api/qa", (req, res) => {
   res.json({ status: "success", qa: newQA });
 });
 
-app.post("/api/qa/answer", (req, res) => {
+app.post("/api/qa/answer", requireAdminAccess, (req, res) => {
   const { id, answer } = req.body;
   const qaIndex = appState.qaList.findIndex(q => q.id === id);
   if (qaIndex > -1) {
@@ -1002,7 +1047,7 @@ app.post("/api/qa/answer", (req, res) => {
 });
 
 // Bookmarks & Notes
-app.post("/api/bookmarks", (req, res) => {
+app.post("/api/bookmarks", requireAdminAccess, (req, res) => {
   const { timestamp, title } = req.body;
   const newBm: Bookmark = {
     id: `bm-${Date.now()}`,
@@ -1013,13 +1058,13 @@ app.post("/api/bookmarks", (req, res) => {
   res.json({ status: "success", bookmarks: appState.bookmarks });
 });
 
-app.post("/api/bookmarks/delete", (req, res) => {
+app.post("/api/bookmarks/delete", requireAdminAccess, (req, res) => {
   const { id } = req.body;
   appState.bookmarks = appState.bookmarks.filter(b => b.id !== id);
   res.json({ status: "success", bookmarks: appState.bookmarks });
 });
 
-app.post("/api/notes", (req, res) => {
+app.post("/api/notes", requireAdminAccess, (req, res) => {
   const { timestamp, text } = req.body;
   const newNote: Note = {
     id: `nt-${Date.now()}`,
@@ -1030,7 +1075,7 @@ app.post("/api/notes", (req, res) => {
   res.json({ status: "success", notes: appState.notes });
 });
 
-app.post("/api/notes/delete", (req, res) => {
+app.post("/api/notes/delete", requireAdminAccess, (req, res) => {
   const { id } = req.body;
   appState.notes = appState.notes.filter(n => n.id !== id);
   res.json({ status: "success", notes: appState.notes });
@@ -1039,14 +1084,27 @@ app.post("/api/notes/delete", (req, res) => {
 // Gemini-Powered Medical Translator endpoint
 app.post("/api/translate", async (req, res) => {
   const { text, sourceLang, targetLang } = req.body;
-  if (!text) {
+  if (typeof text !== "string" || !text.trim()) {
     return res.status(400).json({ error: "No text specified for translation" });
   }
+  if (text.length > MAX_TRANSLATION_TEXT_LENGTH) {
+    return res.status(413).json({ error: `text exceeds ${MAX_TRANSLATION_TEXT_LENGTH} characters` });
+  }
 
-  res.json(await translateText(text, sourceLang, targetLang));
+  try {
+    res.json(await translateText(text, sourceLang, targetLang));
+  } catch (error) {
+    recordTranslationError({
+      error,
+      text,
+      sourceLang: typeof sourceLang === "string" ? sourceLang : "unknown",
+      targetLang: typeof targetLang === "string" ? targetLang : "unknown"
+    });
+    res.status(502).json({ error: "Translation failed" });
+  }
 });
 
-app.post("/api/audio/transcribe-publish", express.raw({ type: "*/*", limit: "15mb" }), async (req, res) => {
+app.post("/api/audio/transcribe-publish", requireAdminAccess, express.raw({ type: "*/*", limit: "15mb" }), async (req, res) => {
   const channelSlug = getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>);
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
   const sourceLang = getQueryValue(req.query.sourceLang, "en").toLowerCase();
@@ -1126,7 +1184,7 @@ If there is no clear speech, return an empty string.`;
   }
 });
 
-app.get("/api/translation-errors", (req, res) => {
+app.get("/api/translation-errors", requireAdminAccess, (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   res.json({
     count: translationErrorLogs.length,
@@ -1134,12 +1192,12 @@ app.get("/api/translation-errors", (req, res) => {
   });
 });
 
-app.delete("/api/translation-errors", (_req, res) => {
+app.delete("/api/translation-errors", requireAdminAccess, (_req, res) => {
   translationErrorLogs.splice(0, translationErrorLogs.length);
   res.json({ status: "cleared" });
 });
 
-app.get("/api/captions/queue", (req, res) => {
+app.get("/api/captions/queue", requireAdminAccess, (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
   const channelSlug = getCaptionChannelKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const limit = Math.min(100, Math.max(1, Number(getQueryValue(req.query.limit, "20")) || 20));
@@ -1154,7 +1212,7 @@ app.get("/api/captions/queue", (req, res) => {
   });
 });
 
-app.get("/api/captions/transcripts", (req, res) => {
+app.get("/api/captions/transcripts", requireAdminAccess, (req, res) => {
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
   const channelSlug = getCaptionChannelKey(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>));
   const limit = Math.min(50, Math.max(1, Number(getQueryValue(req.query.limit, "10")) || 10));
@@ -1165,11 +1223,11 @@ app.get("/api/captions/transcripts", (req, res) => {
   res.json({
     channelSlug,
     count: documents.length,
-    documents
+    documents: documents.map(({ filePath: _filePath, ...document }) => document)
   });
 });
 
-app.post("/api/captions/publish", (req, res) => {
+app.post("/api/captions/publish", requireAdminAccess, (req, res) => {
   const {
     channelSlug,
     timestamp,
@@ -1181,6 +1239,9 @@ app.post("/api/captions/publish", (req, res) => {
 
   if (!text || typeof text !== "string") {
     return res.status(400).json({ error: "text is required" });
+  }
+  if (text.length > MAX_CAPTION_TEXT_LENGTH) {
+    return res.status(413).json({ error: `text exceeds ${MAX_CAPTION_TEXT_LENGTH} characters` });
   }
 
   const segment = createLiveCaptionSegment({
@@ -1207,7 +1268,7 @@ app.get("/api/captions/demo/status", (req, res) => {
   res.json(getDemoCaptionProducerStatus(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>)));
 });
 
-app.post("/api/captions/demo/start", (req, res) => {
+app.post("/api/captions/demo/start", requireAdminAccess, (req, res) => {
   const {
     channelSlug,
     sourceLang,
@@ -1224,7 +1285,7 @@ app.post("/api/captions/demo/start", (req, res) => {
   });
 });
 
-app.post("/api/captions/demo/stop", (req, res) => {
+app.post("/api/captions/demo/stop", requireAdminAccess, (req, res) => {
   const { channelSlug } = req.body;
   const channelKey = getCaptionChannelKey(getCaptionChannelSlugFromBody({ channelSlug }));
   const stopped = stopDemoCaptionProducer(channelKey);
@@ -1425,10 +1486,15 @@ function getLiveTargetLanguages(requestUrl: URL) {
       ? [requestedTargetLang]
       : DEFAULT_LIVE_TARGET_LANGUAGES;
   const normalizedTargetLanguages = rawTargetLanguages
-    .map((languageCode) => languageCode.trim().toLowerCase())
-    .filter(Boolean);
+    .map(normalizeLiveTargetLanguageCode)
+    .filter((languageCode) => SUPPORTED_LIVE_TARGET_LANGUAGES.has(languageCode))
+    .slice(0, MAX_LIVE_TARGET_LANGUAGE_COUNT);
+  const fallbackTargetLanguages = DEFAULT_LIVE_TARGET_LANGUAGES
+    .map(normalizeLiveTargetLanguageCode)
+    .filter((languageCode) => SUPPORTED_LIVE_TARGET_LANGUAGES.has(languageCode))
+    .slice(0, MAX_LIVE_TARGET_LANGUAGE_COUNT);
 
-  return Array.from(new Set(normalizedTargetLanguages.length > 0 ? normalizedTargetLanguages : DEFAULT_LIVE_TARGET_LANGUAGES));
+  return Array.from(new Set(normalizedTargetLanguages.length > 0 ? normalizedTargetLanguages : fallbackTargetLanguages.length > 0 ? fallbackTargetLanguages : ["ko"]));
 }
 
 function getPrimaryLanguageCode(languageCode: string | undefined) {
@@ -1927,12 +1993,21 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
     const sendFrameToLiveConnections = (frame: Buffer) => {
       liveConnections.forEach((liveConnection) => {
-        liveConnection.sendRealtimeInput({
-          audio: {
-            data: frame.toString("base64"),
-            mimeType
-          }
-        });
+        try {
+          liveConnection.sendRealtimeInput({
+            audio: {
+              data: frame.toString("base64"),
+              mimeType
+            }
+          });
+        } catch (error) {
+          recordTranslationError({
+            error,
+            text: "[Gemini Live audio frame send]",
+            sourceLang,
+            targetLang: "live-transcription"
+          });
+        }
       });
     };
 
@@ -2079,17 +2154,42 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         try {
           const message = JSON.parse(data.toString()) as { type?: string; text?: string };
           if (message.type === "text" && message.text) {
+            if (message.text.length > MAX_LIVE_TEXT_FRAME_CHARS) {
+              sendAudioLiveSocketMessage(socket, {
+                type: "error",
+                message: `Text frame exceeds ${MAX_LIVE_TEXT_FRAME_CHARS} characters.`
+              });
+              return;
+            }
+            const normalizedTextFrame = removeSpeechFillers(message.text);
+            const textFrameSourceLang = sourceLang === "auto" ? "en" : sourceLang;
             liveTranscriptBuffers.forEach((_buffer, targetLang) => {
-              const document = transcriptDocuments.get(targetLang);
-              if (!document) return;
-              createLiveCaptionPublisher({
-                socket,
-                channelSlug,
-                sourceLang: targetLang,
-                targetLang,
-                targetLangScope: targetLang,
-                document
-              })(message.text, "Client Text Frame");
+              void (async () => {
+                const document = transcriptDocuments.get(targetLang);
+                if (!document) return;
+                const publisher = createLiveCaptionPublisher({
+                  socket,
+                  channelSlug,
+                  sourceLang: targetLang,
+                  targetLang,
+                  targetLangScope: targetLang,
+                  document
+                });
+                const translation = await translateText(normalizedTextFrame, textFrameSourceLang, targetLang);
+                publisher(translation.translatedText, `Client Text Frame (${translation.engine})`);
+              })().catch((error) => {
+                recordTranslationError({
+                  error,
+                  text: normalizedTextFrame,
+                  sourceLang: textFrameSourceLang,
+                  targetLang
+                });
+                sendAudioLiveSocketMessage(socket, {
+                  type: "error",
+                  targetLang,
+                  message: "Client text frame translation failed."
+                });
+              });
             });
           }
           if (message.type === "end") {
@@ -2116,6 +2216,14 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           : Buffer.from(data);
 
       if (!frame.length) return;
+      if (frame.length > MAX_LIVE_AUDIO_FRAME_BYTES) {
+        sendAudioLiveSocketMessage(socket, {
+          type: "error",
+          message: `Audio frame exceeds ${MAX_LIVE_AUDIO_FRAME_BYTES} bytes.`
+        });
+        socket.close(1009, "Audio frame too large");
+        return;
+      }
       audioFrameCount += 1;
       if (audioFrameCount === 1 || audioFrameCount % 50 === 0) {
         sendAudioLiveSocketMessage(socket, {
@@ -2192,6 +2300,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     if (requestUrl.pathname !== "/api/audio/live") {
       return;
     }
+    if (!hasValidAdminTokenForUrl(requestUrl)) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
 
     audioLiveWss.handleUpgrade(request, socket, head, (webSocket) => {
       audioLiveWss.emit("connection", webSocket, request);
@@ -2200,7 +2313,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 }
 
 // Gemini-Powered Lecture Summarizer endpoint
-app.post("/api/summarize", async (req, res) => {
+app.post("/api/summarize", requireAdminAccess, async (req, res) => {
   const transcript = appState.subtitles.map(s => `[${s.speaker}] ${s.original} -> ${s.translated}`).join("\n");
   
   if (!transcript) {

@@ -40,10 +40,37 @@ function normalizeLayout(layout: PlatformLayout): PlatformLayout {
   };
 }
 
+function readLocalStorageItem(storageKey: string) {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch (error) {
+    console.error(`Failed to read localStorage key ${storageKey}:`, error);
+    return null;
+  }
+}
+
+function writeLocalStorageItem(storageKey: string, value: string) {
+  try {
+    window.localStorage.setItem(storageKey, value);
+  } catch (error) {
+    console.error(`Failed to write localStorage key ${storageKey}:`, error);
+    throw error;
+  }
+}
+
+function removeLocalStorageItem(storageKey: string) {
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch (error) {
+    console.error(`Failed to remove localStorage key ${storageKey}:`, error);
+    throw error;
+  }
+}
+
 export function loadStoredLayout(channelSlug: string, fallbackLayout: PlatformLayout, layoutId = fallbackLayout.id): PlatformLayout {
   if (typeof window === "undefined") return fallbackLayout;
 
-  const rawPlatformLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
+  const rawPlatformLayout = readLocalStorageItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
   const rawLayout = rawPlatformLayout;
   if (!rawLayout) return normalizeLayout(fallbackLayout);
 
@@ -58,7 +85,7 @@ export function loadStoredLayout(channelSlug: string, fallbackLayout: PlatformLa
 export function loadStoredLayoutById(channelSlug: string, layoutId: string): PlatformLayout | null {
   if (typeof window === "undefined") return null;
 
-  const rawLayout = window.localStorage.getItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
+  const rawLayout = readLocalStorageItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
   if (!rawLayout) return null;
 
   try {
@@ -70,12 +97,12 @@ export function loadStoredLayoutById(channelSlug: string, layoutId: string): Pla
 }
 
 export function saveStoredLayout(channelSlug: string, layout: PlatformLayout, layoutId = layout.id) {
-  window.localStorage.setItem(getPlatformLayoutStorageKey(channelSlug, layoutId), JSON.stringify(normalizeLayout(layout)));
+  writeLocalStorageItem(getPlatformLayoutStorageKey(channelSlug, layoutId), JSON.stringify(normalizeLayout(layout)));
 }
 
 export function clearStoredLayout(channelSlug: string, layoutId?: string) {
   if (layoutId) {
-    window.localStorage.removeItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
+    removeLocalStorageItem(getPlatformLayoutStorageKey(channelSlug, layoutId));
     return;
   }
 }
@@ -103,9 +130,9 @@ function normalizeChannel(channel: PlatformChannel & { speakerAffiliation?: stri
 export function loadStoredPlatformChannels(): PlatformChannel[] {
   if (typeof window === "undefined") return [];
 
-  const rawChannels = window.localStorage.getItem(getPlatformChannelsStorageKey())
+  const rawChannels = readLocalStorageItem(getPlatformChannelsStorageKey())
     ?? LEGACY_PLATFORM_CHANNELS_STORAGE_KEYS
-      .map((storageKey) => window.localStorage.getItem(storageKey))
+      .map((storageKey) => readLocalStorageItem(storageKey))
       .find(Boolean);
   if (!rawChannels) return [];
 
@@ -121,7 +148,7 @@ export function loadStoredPlatformChannels(): PlatformChannel[] {
 }
 
 export function saveStoredPlatformChannels(channels: PlatformChannel[]) {
-  window.localStorage.setItem(getPlatformChannelsStorageKey(), JSON.stringify(channels.map(normalizeChannel)));
+  writeLocalStorageItem(getPlatformChannelsStorageKey(), JSON.stringify(channels.map(normalizeChannel)));
 }
 
 export function deleteStoredPlatformChannel(channelId: string) {
@@ -132,7 +159,7 @@ export function deleteStoredPlatformChannel(channelId: string) {
 export function loadStoredPlatformDisplays(channelSlug: string): PlatformDisplayTarget[] {
   if (typeof window === "undefined") return [];
 
-  const rawDisplays = window.localStorage.getItem(getPlatformDisplaysStorageKey(channelSlug));
+  const rawDisplays = readLocalStorageItem(getPlatformDisplaysStorageKey(channelSlug));
   if (!rawDisplays) return [];
 
   try {
@@ -147,7 +174,7 @@ export function loadStoredPlatformDisplays(channelSlug: string): PlatformDisplay
 }
 
 export function saveStoredPlatformDisplays(channelSlug: string, displays: PlatformDisplayTarget[]) {
-  window.localStorage.setItem(getPlatformDisplaysStorageKey(channelSlug), JSON.stringify(displays.map(normalizeDisplay)));
+  writeLocalStorageItem(getPlatformDisplaysStorageKey(channelSlug), JSON.stringify(displays.map(normalizeDisplay)));
 }
 
 export function deleteStoredPlatformDisplay(channelSlug: string, displayId: string) {
