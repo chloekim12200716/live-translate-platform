@@ -9,6 +9,32 @@ interface SlideComponentProps {
 export default function SlideComponent({ channel }: SlideComponentProps) {
   const slide = channel.slides[0];
 
+  if (!slide) {
+    return (
+      <div className="flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-lg border border-white/15 bg-slate-950/90 p-5 text-left text-white shadow-2xl backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-cyan-200">
+            <FileText className="h-3.5 w-3.5" />
+            Slide
+          </div>
+          <span className="text-[11px] font-mono text-slate-400">No slides</span>
+        </div>
+
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <h2 className="text-lg font-bold text-slate-50">등록된 슬라이드가 없습니다</h2>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300">
+            이 채널에 슬라이드 자료를 추가하거나 레이아웃에서 Slide 컴포넌트를 숨겨주세요.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[11px] text-slate-400">
+          <span>{channel.title}</span>
+          <span className="font-mono">0 / 0</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-lg border border-white/15 bg-slate-950/90 p-5 text-left text-white shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between gap-3">

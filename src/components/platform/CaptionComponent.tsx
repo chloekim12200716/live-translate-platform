@@ -309,7 +309,7 @@ export default function CaptionComponent({
           >
             {latestCaptionText}
           </p>
-          {isLoading || captionLines.length === 0 ? (
+          {visibleCaptionLines.length === 0 ? (
             <p>&nbsp;</p>
           ) : (
             <div className="flex h-full min-h-0 flex-col justify-end gap-1 overflow-hidden">
