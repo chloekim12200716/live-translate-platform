@@ -5,3 +5,18 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+@keyframes caption-vertical-roll {
+  0%, 12% {
+    transform: translateY(0);
+  }
+
+  88%, 100% {
+    transform: translateY(calc(-1 * var(--caption-scroll-distance, 0px)));
+  }
+}
+
+.caption-vertical-roll {
+  animation: caption-vertical-roll var(--caption-scroll-duration, 3.2s) linear 1 forwards;
+  will-change: transform;
+}

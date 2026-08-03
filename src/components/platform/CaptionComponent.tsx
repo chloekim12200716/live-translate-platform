@@ -98,24 +98,44 @@ export default function CaptionComponent({
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
   const latestCaptionMeasureRef = useRef<HTMLParagraphElement>(null);
+  const latestCaptionViewportRef = useRef<HTMLDivElement>(null);
   const latestCaptionText = draftCaptionLine?.text ?? captionLines[captionLines.length - 1]?.text ?? "";
   const [shouldShowOnlyLatestCaption, setShouldShowOnlyLatestCaption] = useState(false);
+  const [latestCaptionScroll, setLatestCaptionScroll] = useState({
+    shouldScroll: false,
+    distancePx: 0,
+    durationSeconds: 0
+  });
 
   useLayoutEffect(() => {
     const measureLatestCaption = () => {
       const measureElement = latestCaptionMeasureRef.current;
+      const viewportElement = latestCaptionViewportRef.current;
       if (!measureElement || !latestCaptionText) {
         setShouldShowOnlyLatestCaption(false);
+        setLatestCaptionScroll({ shouldScroll: false, distancePx: 0, durationSeconds: 0 });
         return;
       }
 
       const lineHeight = Number.parseFloat(window.getComputedStyle(measureElement).lineHeight);
       if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
         setShouldShowOnlyLatestCaption(false);
+        setLatestCaptionScroll({ shouldScroll: false, distancePx: 0, durationSeconds: 0 });
         return;
       }
 
-      setShouldShowOnlyLatestCaption(measureElement.scrollHeight > lineHeight * 1.45);
+      const textHeight = measureElement.scrollHeight;
+      const viewportHeight = viewportElement?.clientHeight ?? 0;
+      const shouldScroll = viewportHeight > 0 && textHeight > viewportHeight;
+      const scrollDistancePx = shouldScroll ? Math.ceil(textHeight - viewportHeight + lineHeight * 0.35) : 0;
+      const durationSeconds = shouldScroll ? Math.min(6, Math.max(2.8, scrollDistancePx / 42)) : 0;
+
+      setShouldShowOnlyLatestCaption(textHeight > lineHeight * 1.45 || shouldScroll);
+      setLatestCaptionScroll({
+        shouldScroll,
+        distancePx: scrollDistancePx,
+        durationSeconds
+      });
     };
 
     measureLatestCaption();
@@ -125,8 +145,8 @@ export default function CaptionComponent({
     }
 
     const resizeObserver = new ResizeObserver(measureLatestCaption);
-    if (latestCaptionMeasureRef.current?.parentElement) {
-      resizeObserver.observe(latestCaptionMeasureRef.current.parentElement);
+    if (latestCaptionViewportRef.current) {
+      resizeObserver.observe(latestCaptionViewportRef.current);
     }
     return () => resizeObserver.disconnect();
   }, [latestCaptionText]);
@@ -312,14 +332,23 @@ export default function CaptionComponent({
           {visibleCaptionLines.length === 0 ? (
             <p>&nbsp;</p>
           ) : (
-            <div className="flex h-full min-h-0 flex-col justify-end gap-1 overflow-hidden">
+            <div ref={latestCaptionViewportRef} className="flex h-full min-h-0 flex-col justify-end gap-1 overflow-hidden">
               {visibleCaptionLines.map((line, index) => (
                 <p
-                  key={line.key}
-                  className={`${shouldShowOnlyLatestCaption ? "line-clamp-2" : "line-clamp-1"} whitespace-normal break-words`}
+                  key={`${line.key}:${line.comparisonKey}`}
+                  className={`whitespace-normal break-words ${latestCaptionScroll.shouldScroll && index === visibleCaptionLines.length - 1 ? "caption-vertical-roll" : ""}`}
                   style={{
                     color: index === visibleCaptionLines.length - 1 ? captionStyle.textColor : `${captionStyle.textColor}cc`,
-                    textShadow: "0 1px 2px rgba(0, 0, 0, 0.45)"
+                    overflowWrap: "anywhere",
+                    textShadow: "0 1px 2px rgba(0, 0, 0, 0.45)",
+                    ...(
+                      latestCaptionScroll.shouldScroll && index === visibleCaptionLines.length - 1
+                        ? {
+                          "--caption-scroll-distance": `${latestCaptionScroll.distancePx}px`,
+                          "--caption-scroll-duration": `${latestCaptionScroll.durationSeconds}s`
+                        } as React.CSSProperties
+                        : {}
+                    )
                   }}
                 >
                   <span
