@@ -42,17 +42,49 @@ export default function AdminCMS({
 
   // Standard pre-defined clinical mock channel script
   const mockEnChannelScript = [
-    { text: "In today's clinical update, we will discuss the dual-targeting mechanism of GLP-1 receptor agonist and GIP receptor co-agonists.", time: 10 },
-    { text: "Recent randomized clinical trials showed significant cardiovascular benefits, especially for patients with high cardiovascular risk.", time: 25 },
-    { text: "Moreover, SGLT2 inhibitors like empagliflozin have demonstrated a reduction in the primary endpoint of cardiovascular death or hospitalization for heart failure.", time: 45 },
-    { text: "We should also monitor renal functions, including eGFR, to assess any progression of chronic kidney disease.", time: 65 }
+    {
+      text: "In today's clinical update, we will discuss the dual-targeting mechanism of GLP-1 receptor agonist and GIP receptor co-agonists.",
+      translated: "오늘 임상 업데이트에서는 GLP-1 수용체 작용제와 GIP 수용체 공동 작용제의 이중 표적 기전에 대해 논의하겠습니다.",
+      time: 10
+    },
+    {
+      text: "Recent randomized clinical trials showed significant cardiovascular benefits, especially for patients with high cardiovascular risk.",
+      translated: "최근 무작위 임상시험에서는 특히 심혈관 위험이 높은 환자에게 유의미한 심혈관 이점이 확인되었습니다.",
+      time: 25
+    },
+    {
+      text: "Moreover, SGLT2 inhibitors like empagliflozin have demonstrated a reduction in the primary endpoint of cardiovascular death or hospitalization for heart failure.",
+      translated: "또한 엠파글리플로진 같은 SGLT2 억제제는 심혈관 사망 또는 심부전 입원이라는 1차 평가변수를 감소시키는 결과를 보였습니다.",
+      time: 45
+    },
+    {
+      text: "We should also monitor renal functions, including eGFR, to assess any progression of chronic kidney disease.",
+      translated: "만성 신장질환의 진행 여부를 평가하기 위해 eGFR을 포함한 신장 기능도 함께 모니터링해야 합니다.",
+      time: 65
+    }
   ];
 
   const mockKoChannelScript = [
-    { text: "오늘 강연에서는 시신경척수염 범주질환, 즉 NMOSD 환자의 최신 치료 전략에 대해 설명해 드리겠습니다.", time: 10 },
-    { text: "AQP4-IgG 양성 환자들의 장기 재발을 효과적으로 방지하기 위해 이중 표적 항체 치료가 선구적인 역할을 하고 있습니다.", time: 25 },
-    { text: "실제 임상 데이터상 약물 투여군은 primary endpoint인 재발 위험을 대조군 대비 무려 70% 이상 유의하게 낮추었습니다.", time: 45 },
-    { text: "모니터링 과정에서 백혈구 감소증이나 주사 부위 감염 같은 예측 가능한 adverse event 유무를 항시 체크해야 합니다.", time: 65 }
+    {
+      text: "오늘 강연에서는 시신경척수염 범주질환, 즉 NMOSD 환자의 최신 치료 전략에 대해 설명해 드리겠습니다.",
+      translated: "In today's lecture, we will review the latest treatment strategies for patients with neuromyelitis optica spectrum disorder, or NMOSD.",
+      time: 10
+    },
+    {
+      text: "AQP4-IgG 양성 환자들의 장기 재발을 효과적으로 방지하기 위해 이중 표적 항체 치료가 선구적인 역할을 하고 있습니다.",
+      translated: "Dual-target antibody therapy is playing a leading role in preventing long-term relapse in AQP4-IgG positive patients.",
+      time: 25
+    },
+    {
+      text: "실제 임상 데이터상 약물 투여군은 primary endpoint인 재발 위험을 대조군 대비 무려 70% 이상 유의하게 낮추었습니다.",
+      translated: "In real-world clinical data, the treatment group reduced the primary endpoint, relapse risk, by more than 70% compared with the control group.",
+      time: 45
+    },
+    {
+      text: "모니터링 과정에서 백혈구 감소증이나 주사 부위 감염 같은 예측 가능한 adverse event 유무를 항시 체크해야 합니다.",
+      translated: "During monitoring, predictable adverse events such as leukopenia or injection-site infection should be checked continuously.",
+      time: 65
+    }
   ];
 
   // Initialize Speech Recognition on Mount
@@ -71,27 +103,14 @@ export default function AdminCMS({
         const isFinalResult = latestResult.isFinal;
 
         if (isFinalResult) {
-          // Send to translation API proxy on server
           try {
-            const target = appState.speakerLang === "en" ? "ko" : "en";
-            const response = await fetch("/api/translate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                text: transcriptText,
-                sourceLang: appState.speakerLang,
-                targetLang: target
-              })
-            });
-            const data = await response.json();
-            
             // Post finished subtitle to server
             await fetch("/api/subtitles/add", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 original: transcriptText,
-                translated: data.translatedText,
+                translated: transcriptText,
                 timestamp: currentVideoTime || 5,
                 speaker: appState.speakerLang === "en" ? "Dr. Robert (Mic)" : "의학연자 (Mic)",
                 isFinal: true
@@ -103,7 +122,7 @@ export default function AdminCMS({
             const stateData = await stateRes.json();
             onUpdateState({ subtitles: stateData.subtitles });
           } catch (error) {
-            console.error("Speech Recognition translation/saving failed:", error);
+            console.error("Speech Recognition saving failed:", error);
           }
         }
       };
@@ -156,24 +175,15 @@ export default function AdminCMS({
 
             const currentSpeech = channelScript[currentIndex];
             const source = appState.speakerLang;
-            const target = source === "en" ? "ko" : "en";
 
             try {
-              // Request translation
-              const res = await fetch("/api/translate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: currentSpeech.text, sourceLang: source, targetLang: target })
-              });
-              const transData = await res.json();
-
               // Add subtitle
               await fetch("/api/subtitles/add", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   original: currentSpeech.text,
-                  translated: transData.translatedText,
+                  translated: currentSpeech.translated,
                   timestamp: currentSpeech.time,
                   speaker: source === "en" ? "Dr. Robert (AI)" : "의학연자 (AI)",
                   isFinal: true
@@ -233,22 +243,7 @@ export default function AdminCMS({
     if (!newOrigText.trim()) return;
 
     try {
-      // If translated text is empty, auto-request AI translation first!
-      let trans = newTransText;
-      if (!trans.trim()) {
-        const target = appState.speakerLang === "en" ? "ko" : "en";
-        const transRes = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: newOrigText,
-            sourceLang: appState.speakerLang,
-            targetLang: target
-          })
-        });
-        const transData = await transRes.json();
-        trans = transData.translatedText;
-      }
+      const trans = newTransText.trim() || newOrigText;
 
       const addRes = await fetch("/api/subtitles/add", {
         method: "POST",
@@ -402,10 +397,10 @@ export default function AdminCMS({
           <div className="text-left">
             <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <Languages className="w-4 h-4 text-indigo-600" />
-              실시간 AI 자막 스트림 모니터링 및 실시간 교정
+              실시간 자막 스트림 모니터링 및 수동 교정
             </h2>
             <p className="text-[11px] text-slate-500">
-              운영자가 실시간으로 AI 번역본을 검수하고 수동 보정하면 시청자 플레이어 CC 영역에 즉시 동기화됩니다.
+              운영자가 자막을 검수하고 수동 보정하면 시청자 플레이어 CC 영역에 즉시 동기화됩니다.
             </p>
           </div>
           
@@ -455,7 +450,7 @@ export default function AdminCMS({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-500 block">인공지능 실시간 번역 자막</label>
+                        <label className="text-[10px] font-bold text-slate-500 block">표시 자막</label>
                         <textarea
                           value={editTransText}
                           onChange={(e) => setEditTransText(e.target.value)}
@@ -532,14 +527,14 @@ export default function AdminCMS({
         <form onSubmit={handleAddManualSubtitle} className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
           <input
             type="text"
-            placeholder="발화 내용을 직접 타이핑하세요... (공백 시 서버에서 즉시 번역 처리)"
+            placeholder="발화 내용을 직접 타이핑하세요..."
             value={newOrigText}
             onChange={(e) => setNewOrigText(e.target.value)}
             className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
           />
           <input
             type="text"
-            placeholder="수동 번역 자막 입력 (필요 시)"
+            placeholder="표시 자막 입력 (비우면 원문 사용)"
             value={newTransText}
             onChange={(e) => setNewTransText(e.target.value)}
             className="w-1/3 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"

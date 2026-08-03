@@ -9,7 +9,6 @@ import {
   getBackgroundSize,
   getComponentFrameStyle
 } from "../../utils/layoutEditor";
-import CaptionStreamDemoControls from "./CaptionStreamDemoControls";
 import CaptionComponent from "./CaptionComponent";
 import InterpretationAudioPlayer from "./InterpretationAudioPlayer";
 import NoticeComponent from "./NoticeComponent";
@@ -153,10 +152,6 @@ export default function DisplayRenderer({
               <FileText className="h-3.5 w-3.5" />
               View Transcript
             </button>
-            <CaptionStreamDemoControls
-              channelSlug={channel.slug}
-              sourceLanguageCode={channel.sourceLanguageCode}
-            />
             <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide backdrop-blur">
               /live/{channel.slug}/{languageCode}
             </div>
@@ -233,7 +228,7 @@ export default function DisplayRenderer({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {transcriptEntries.length === 0 ? (
               <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                아직 수신된 자막이 없습니다. Demo stream을 시작하거나 caption queue에 자막을 publish하면 여기에 누적됩니다.
+                아직 수신된 자막이 없습니다. Gemini Live 오디오 캡처를 시작하면 여기에 누적됩니다.
               </div>
             ) : (
               <div className="space-y-3">

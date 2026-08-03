@@ -153,50 +153,15 @@ export default function CaptionComponent({
   useEffect(() => {
     const controller = new AbortController();
     let eventSource: EventSource | null = null;
-    let didFallbackToTranslateApi = false;
 
     setCaptionLines(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
     setDraftCaptionLine(null);
     setIsLoading(true);
     setSequence(0);
 
-    const requestSingleTranslation = () => {
-      setEngine("Translation API Fallback");
-      fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: sourceText,
-          sourceLang: normalizedSourceLanguage,
-          targetLang: normalizedLanguage
-        }),
-        signal: controller.signal
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error(`Translation request failed (${response.status})`);
-          }
-          return response.json();
-        })
-        .then((data: { translatedText?: string; engine?: string }) => {
-          const nextCaption = data.translatedText?.trim() || (shouldUseMockFallback ? fallbackCaption : "");
-          setCaptionLines(nextCaption ? [createCaptionLine(nextCaption, "single-translation")] : []);
-          setEngine(data.engine || "Translation API Fallback");
-        })
-        .catch((error: Error) => {
-          if (controller.signal.aborted) return;
-          setCaptionLines(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
-          setEngine(shouldUseMockFallback ? "Local Mock Caption" : "Caption Queue");
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) {
-            setIsLoading(false);
-          }
-        });
-    };
-
     if (typeof EventSource === "undefined") {
-      requestSingleTranslation();
+      setEngine("Caption Queue Unavailable");
+      setIsLoading(false);
       return () => controller.abort();
     }
 
@@ -277,10 +242,9 @@ export default function CaptionComponent({
       setEngine("Caption Queue");
     });
     eventSource.onerror = () => {
-      if (didFallbackToTranslateApi) return;
-      didFallbackToTranslateApi = true;
       eventSource?.close();
-      requestSingleTranslation();
+      setEngine("Caption Queue Disconnected");
+      setIsLoading(false);
     };
 
     return () => {

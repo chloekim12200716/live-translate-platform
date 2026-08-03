@@ -762,7 +762,7 @@ export default function AdminChannelsPage() {
             </div>
 
             <div className="mt-4 rounded-xl border border-cyan-100 bg-cyan-50 p-4 text-xs leading-relaxed text-cyan-900">
-              현재 구현: `/live/:channelSlug/:languageCode`는 투명 자막 오버레이로 열리고, 전체 레이아웃 검토용 `?view=full`에서 `View Transcript`, `Show/Hide Header`, demo stream Start/Stop을 사용할 수 있습니다.
+              현재 구현: `/live/:channelSlug/:languageCode`는 투명 자막 오버레이로 열리고, 전체 레이아웃 검토용 `?view=full`에서 `View Transcript`, `Show/Hide Header`를 사용할 수 있습니다.
               다음 단계에서 이 설정들을 DB 저장 가능한 player preset으로 분리할 수 있습니다.
             </div>
           </section>

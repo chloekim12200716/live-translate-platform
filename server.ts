@@ -24,10 +24,8 @@ const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.5-live-tran
 const GEMINI_LIVE_API_VERSION = process.env.GEMINI_LIVE_API_VERSION || "v1alpha";
 const TRANSLATION_TIMEOUT_MS = Number(process.env.TRANSLATION_TIMEOUT_MS || 20000);
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
-const MAX_TRANSLATION_TEXT_LENGTH = Number(process.env.MAX_TRANSLATION_TEXT_LENGTH || 10000);
 const MAX_CAPTION_TEXT_LENGTH = Number(process.env.MAX_CAPTION_TEXT_LENGTH || 5000);
 const MAX_LIVE_AUDIO_FRAME_BYTES = Number(process.env.MAX_LIVE_AUDIO_FRAME_BYTES || 262144);
-const MAX_LIVE_TEXT_FRAME_CHARS = Number(process.env.MAX_LIVE_TEXT_FRAME_CHARS || 5000);
 const MAX_LIVE_TARGET_LANGUAGE_COUNT = Number(process.env.MAX_LIVE_TARGET_LANGUAGE_COUNT || 7);
 const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || "ar,zh,en,fr,ko,ru,es")
   .split(",")
@@ -551,15 +549,6 @@ interface CaptionStreamSubscriber {
   isClosed: () => boolean;
 }
 
-interface DemoCaptionProducer {
-  channelSlug: string;
-  sourceLang: string;
-  intervalMs: number;
-  nextIndex: number;
-  timer: NodeJS.Timeout;
-  startedAt: string;
-}
-
 type LiveTranslationMode = "realtime" | "sentence";
 
 interface LiveTranscriptDocumentEntry {
@@ -581,38 +570,9 @@ interface LiveTranscriptDocument {
   filePath?: string;
 }
 
-const demoLiveCaptionTemplates = [
-  {
-    timestamp: 0,
-    speaker: "Dr. Robert",
-    text: "Good evening, colleagues. Today we will review the clinical trials of dual-targeting therapies."
-  },
-  {
-    timestamp: 6,
-    speaker: "Dr. Robert",
-    text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk."
-  },
-  {
-    timestamp: 12,
-    speaker: "Dr. Robert",
-    text: "Specifically, we will look at how GLP-1 receptor agonists alter metabolic functions."
-  },
-  {
-    timestamp: 18,
-    speaker: "Dr. Robert",
-    text: "The primary endpoint was evaluated over a period of 48 weeks."
-  },
-  {
-    timestamp: 24,
-    speaker: "Dr. Robert",
-    text: "We also analyzed the risk of serious adverse events in the treatment group."
-  }
-];
-
 let liveCaptionSequence = 0;
 const liveCaptionQueue: LiveCaptionSegment[] = [];
 const captionStreamSubscribers = new Map<string, CaptionStreamSubscriber>();
-const demoCaptionProducers = new Map<string, DemoCaptionProducer>();
 const liveTranscriptDocuments: LiveTranscriptDocument[] = [];
 const transcriptOutputDirectory = path.join(process.cwd(), "runtime", "transcripts");
 
@@ -762,23 +722,9 @@ function createLiveCaptionSegment({
 function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: LiveCaptionSegment) {
   const sourceLang = segment.sourceLang || subscriber.fallbackSourceLang;
   const isSameLanguage = sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase();
+  const isTargetedCaption = segment.targetLang === subscriber.targetLang;
 
-  if (isSameLanguage) {
-    subscriber.writeEvent("caption", {
-      id: segment.id,
-      channelSlug: segment.channelSlug,
-      timestamp: segment.timestamp,
-      speaker: segment.speaker,
-      sourceText: segment.text,
-      translatedText: segment.text,
-      engine: segment.isFinal ? "Live Translation Final" : "Live Translation Draft",
-      sourceLang,
-      targetLang: subscriber.targetLang,
-      isFinal: segment.isFinal,
-      sequence: segment.sequence
-    });
-    return;
-  }
+  if (!isSameLanguage && !isTargetedCaption) return;
 
   subscriber.writeEvent("caption", {
     id: segment.id,
@@ -786,42 +732,13 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
     timestamp: segment.timestamp,
     speaker: segment.speaker,
     sourceText: segment.text,
-    translatedText: sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase() ? segment.text : "",
-    engine: "Live Caption Queue",
+    translatedText: segment.text,
+    engine: segment.isFinal ? "Live Translation Final" : "Live Translation Draft",
     sourceLang,
     targetLang: subscriber.targetLang,
-    isFinal: false,
+    isFinal: segment.isFinal,
     sequence: segment.sequence
   });
-
-  translateText(segment.text, sourceLang, subscriber.targetLang)
-    .then((translation) => {
-      if (subscriber.isClosed()) return;
-
-      subscriber.writeEvent("caption", {
-        id: segment.id,
-        channelSlug: segment.channelSlug,
-        timestamp: segment.timestamp,
-        speaker: segment.speaker,
-        sourceText: segment.text,
-        translatedText: translation.translatedText,
-        engine: translation.engine,
-        sourceLang: translation.sourceLang,
-        targetLang: translation.targetLang,
-        isFinal: segment.isFinal,
-        sequence: segment.sequence
-      });
-    })
-    .catch((error: Error) => {
-      if (subscriber.isClosed()) return;
-
-      subscriber.writeEvent("caption-error", {
-        id: segment.id,
-        channelSlug: segment.channelSlug,
-        message: error.message,
-        sequence: segment.sequence
-      });
-    });
 }
 
 function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: boolean } = {}) {
@@ -842,83 +759,8 @@ function publishLiveCaption(segment: LiveCaptionSegment, options: { persist?: bo
 
   captionStreamSubscribers.forEach((subscriber) => {
     if (subscriber.channelSlug !== segment.channelSlug) return;
-    if (segment.targetLang && segment.targetLang !== subscriber.targetLang) return;
     writeLiveCaptionEvent(subscriber, segment);
   });
-}
-
-function publishNextDemoCaption(producer: DemoCaptionProducer) {
-  const template = demoLiveCaptionTemplates[producer.nextIndex % demoLiveCaptionTemplates.length];
-  producer.nextIndex += 1;
-
-  publishLiveCaption(createLiveCaptionSegment({
-    channelSlug: producer.channelSlug,
-    timestamp: template.timestamp,
-    speaker: template.speaker,
-    text: template.text,
-    sourceLang: producer.sourceLang,
-    isFinal: true
-  }));
-}
-
-function stopDemoCaptionProducer(channelSlug: string | undefined) {
-  const channelKey = getCaptionChannelKey(channelSlug);
-  const producer = demoCaptionProducers.get(channelKey);
-  if (!producer) return false;
-
-  clearInterval(producer.timer);
-  demoCaptionProducers.delete(channelKey);
-  return true;
-}
-
-function getDemoCaptionProducerStatus(channelSlug: string | undefined) {
-  const channelKey = getCaptionChannelKey(channelSlug);
-  const producer = demoCaptionProducers.get(channelKey);
-
-  return {
-    channelSlug: channelKey,
-    isRunning: Boolean(producer),
-    sourceLang: producer?.sourceLang ?? "en",
-    intervalMs: producer?.intervalMs ?? null,
-    startedAt: producer?.startedAt ?? null,
-    nextIndex: producer?.nextIndex ?? 0,
-    subscribers: Array.from(captionStreamSubscribers.values())
-      .filter((subscriber) => subscriber.channelSlug === channelKey)
-      .length,
-    queuedCaptions: liveCaptionQueue.filter((segment) => segment.channelSlug === channelKey).length
-  };
-}
-
-function startDemoCaptionProducer({
-  channelSlug,
-  sourceLang,
-  intervalMs
-}: {
-  channelSlug: string | undefined;
-  sourceLang: string | undefined;
-  intervalMs: number;
-}) {
-  const channelKey = getCaptionChannelKey(channelSlug);
-  stopDemoCaptionProducer(channelKey);
-
-  const producer: DemoCaptionProducer = {
-    channelSlug: channelKey,
-    sourceLang: (sourceLang || "en").toLowerCase(),
-    intervalMs: Math.max(1500, intervalMs || 3500),
-    nextIndex: 0,
-    timer: setInterval(() => {
-      const currentProducer = demoCaptionProducers.get(channelKey);
-      if (currentProducer) {
-        publishNextDemoCaption(currentProducer);
-      }
-    }, Math.max(1500, intervalMs || 3500)),
-    startedAt: new Date().toISOString()
-  };
-
-  demoCaptionProducers.set(channelKey, producer);
-  publishNextDemoCaption(producer);
-
-  return getDemoCaptionProducerStatus(channelKey);
 }
 
 // In-Memory Live State
@@ -1081,29 +923,6 @@ app.post("/api/notes/delete", requireAdminAccess, (req, res) => {
   res.json({ status: "success", notes: appState.notes });
 });
 
-// Gemini-Powered Medical Translator endpoint
-app.post("/api/translate", async (req, res) => {
-  const { text, sourceLang, targetLang } = req.body;
-  if (typeof text !== "string" || !text.trim()) {
-    return res.status(400).json({ error: "No text specified for translation" });
-  }
-  if (text.length > MAX_TRANSLATION_TEXT_LENGTH) {
-    return res.status(413).json({ error: `text exceeds ${MAX_TRANSLATION_TEXT_LENGTH} characters` });
-  }
-
-  try {
-    res.json(await translateText(text, sourceLang, targetLang));
-  } catch (error) {
-    recordTranslationError({
-      error,
-      text,
-      sourceLang: typeof sourceLang === "string" ? sourceLang : "unknown",
-      targetLang: typeof targetLang === "string" ? targetLang : "unknown"
-    });
-    res.status(502).json({ error: "Translation failed" });
-  }
-});
-
 app.post("/api/audio/transcribe-publish", requireAdminAccess, express.raw({ type: "*/*", limit: "15mb" }), async (req, res) => {
   const channelSlug = getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>);
   const getQueryValue = (value: unknown, fallback: string) => typeof value === "string" ? value : fallback;
@@ -1234,6 +1053,7 @@ app.post("/api/captions/publish", requireAdminAccess, (req, res) => {
     speaker,
     text,
     sourceLang,
+    targetLang,
     isFinal
   } = req.body;
 
@@ -1246,6 +1066,7 @@ app.post("/api/captions/publish", requireAdminAccess, (req, res) => {
 
   const segment = createLiveCaptionSegment({
     channelSlug: getCaptionChannelSlugFromBody({ channelSlug }),
+    targetLang: typeof targetLang === "string" ? targetLang : undefined,
     timestamp,
     speaker,
     text,
@@ -1261,38 +1082,6 @@ app.post("/api/captions/publish", requireAdminAccess, (req, res) => {
     subscribers: Array.from(captionStreamSubscribers.values())
       .filter((subscriber) => subscriber.channelSlug === segment.channelSlug)
       .length
-  });
-});
-
-app.get("/api/captions/demo/status", (req, res) => {
-  res.json(getDemoCaptionProducerStatus(getCaptionChannelSlugFromQuery(req.query as Record<string, unknown>)));
-});
-
-app.post("/api/captions/demo/start", requireAdminAccess, (req, res) => {
-  const {
-    channelSlug,
-    sourceLang,
-    intervalMs
-  } = req.body;
-
-  res.json({
-    status: "started",
-    producer: startDemoCaptionProducer({
-      channelSlug: getCaptionChannelSlugFromBody({ channelSlug }),
-      sourceLang,
-      intervalMs: Number(intervalMs) || 3500
-    })
-  });
-});
-
-app.post("/api/captions/demo/stop", requireAdminAccess, (req, res) => {
-  const { channelSlug } = req.body;
-  const channelKey = getCaptionChannelKey(getCaptionChannelSlugFromBody({ channelSlug }));
-  const stopped = stopDemoCaptionProducer(channelKey);
-
-  res.json({
-    status: stopped ? "stopped" : "not-running",
-    producer: getDemoCaptionProducerStatus(channelKey)
   });
 });
 
@@ -1732,24 +1521,15 @@ function mergeRepeatedBoundaryPhrase(currentText: string, fragment: string) {
 function createLiveTranscriptBuffer({
   socket,
   publishTranscript,
-  mode,
-  sourceLang,
-  targetLang
+  mode
 }: {
   socket: WebSocket;
   publishTranscript: (text: string, engine?: string, isFinal?: boolean) => void;
   mode: LiveTranslationMode;
-  sourceLang: string;
-  targetLang: string;
 }) {
   let pendingText = "";
   let sourcePendingText = "";
-  let detectedSourceLang = getPrimaryLanguageCode(sourceLang) || "en";
-  let lastRealtimeDraftSource = "";
-  let hasFinalFragments = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let realtimeDraftTimer: ReturnType<typeof setTimeout> | null = null;
-  let realtimeDraftRequestId = 0;
 
   const clearDebounceTimer = () => {
     if (!debounceTimer) return;
@@ -1757,84 +1537,19 @@ function createLiveTranscriptBuffer({
     debounceTimer = null;
   };
 
-  const clearRealtimeDraftTimer = () => {
-    if (!realtimeDraftTimer) return;
-    clearTimeout(realtimeDraftTimer);
-    realtimeDraftTimer = null;
-  };
-
-  const translateAndPublishSourceText = async (sourceText: string, isFinal: boolean, reason: string) => {
-    const normalizedSourceText = removeSpeechFillers(sourceText);
-    if (!shouldPublishTranscriptText(normalizedSourceText)) return false;
-    if (!isFinal && normalizedSourceText === lastRealtimeDraftSource) return false;
-
-    const requestId = realtimeDraftRequestId + 1;
-    realtimeDraftRequestId = requestId;
-    lastRealtimeDraftSource = normalizedSourceText;
-
-    const translation = await translateText(normalizedSourceText, detectedSourceLang, targetLang);
-    if (!isFinal && requestId !== realtimeDraftRequestId) return;
-    if (isFallbackTranslationResult(translation)) {
-      sendAudioLiveSocketMessage(socket, {
-        type: "debug",
-        message: `source rewrite skipped fallback translation (${reason}): ${translation.engine}`
-      });
-      return false;
-    }
-
-    publishTranscript(
-      translation.translatedText,
-      `${translation.engine} ${isFinal ? "Final" : "Draft"} (${reason})`,
-      isFinal
-    );
-    return true;
-  };
-
-  const scheduleRealtimeDraftTranslation = () => {
-    if (mode !== "realtime") return;
-    const sourceText = sourcePendingText;
-    if (!shouldPublishTranscriptText(sourceText)) return;
-
-    clearRealtimeDraftTimer();
-    realtimeDraftTimer = setTimeout(() => {
-      void translateAndPublishSourceText(sourceText, false, "source-rewrite")
-        .catch((error) => {
-          recordTranslationError({
-            error,
-            text: sourceText,
-            sourceLang: detectedSourceLang,
-            targetLang
-          });
-        });
-    }, 650);
-  };
-
   const flush = async (reason: string) => {
     clearDebounceTimer();
-    clearRealtimeDraftTimer();
     const normalizedText = removeSpeechFillers(pendingText);
     const normalizedSourceText = removeSpeechFillers(sourcePendingText);
     pendingText = "";
     sourcePendingText = "";
-    hasFinalFragments = false;
-
-    if (mode === "realtime" && shouldPublishTranscriptText(normalizedSourceText)) {
-      sendAudioLiveSocketMessage(socket, {
-        type: "debug",
-        message: `source transcript flushed (${reason}): ${normalizedSourceText.length} chars`
-      });
-      const didPublishSourceRewrite = await translateAndPublishSourceText(normalizedSourceText, true, reason);
-      if (didPublishSourceRewrite) return;
-    }
 
     if (!shouldPublishTranscriptText(normalizedText)) {
       if (shouldPublishTranscriptText(normalizedSourceText)) {
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
-          message: `source transcript fallback (${reason}): ${normalizedSourceText.length} chars`
+          message: `source transcript observed without Gemini Live output (${reason}): ${normalizedSourceText.length} chars`
         });
-        await translateAndPublishSourceText(normalizedSourceText, true, `${reason}-source-fallback`);
-        return;
       }
 
       if (normalizedText) {
@@ -1880,22 +1595,20 @@ function createLiveTranscriptBuffer({
 
       if (inputText) {
         const inputLanguage = getPrimaryLanguageCode(serverContent?.inputTranscription?.languageCode);
-        if (inputLanguage && inputLanguage !== "und") {
-          detectedSourceLang = inputLanguage;
-        }
         sourcePendingText = appendTranscriptFragment(sourcePendingText, removeSpeechFillers(inputText));
-        scheduleRealtimeDraftTranslation();
 
         sendAudioLiveSocketMessage(socket, {
           type: "debug",
-          message: `input transcript observed: ${normalizeTranscriptText(inputText)}`
+          message: `input transcript observed${inputLanguage && inputLanguage !== "und" ? ` (${inputLanguage})` : ""}: ${normalizeTranscriptText(inputText)}`
         });
       }
 
       if (outputText) {
         const cleanedOutputText = removeSpeechFillers(outputText);
-        hasFinalFragments = true;
         pendingText = appendTranscriptFragment(pendingText, cleanedOutputText || outputText);
+        if (mode === "realtime" && shouldPublishTranscriptText(pendingText)) {
+          publishTranscript(pendingText, `Gemini ${GEMINI_LIVE_MODEL} Live Draft`, false);
+        }
         if (shouldFlushTranscriptNow(sourcePendingText) || shouldFlushTranscriptNow(pendingText)) {
           void flush("sentence-boundary");
         } else {
@@ -1917,7 +1630,6 @@ function createLiveTranscriptBuffer({
     flush,
     dispose() {
       clearDebounceTimer();
-      clearRealtimeDraftTimer();
     }
   };
 }
@@ -1985,9 +1697,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       liveTranscriptBuffers.set(targetLang, createLiveTranscriptBuffer({
         socket,
         publishTranscript: publishLiveTranscript,
-        mode: translationMode,
-        sourceLang,
-        targetLang
+        mode: translationMode
       }));
     });
 
@@ -2154,43 +1864,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         try {
           const message = JSON.parse(data.toString()) as { type?: string; text?: string };
           if (message.type === "text" && message.text) {
-            if (message.text.length > MAX_LIVE_TEXT_FRAME_CHARS) {
-              sendAudioLiveSocketMessage(socket, {
-                type: "error",
-                message: `Text frame exceeds ${MAX_LIVE_TEXT_FRAME_CHARS} characters.`
-              });
-              return;
-            }
-            const normalizedTextFrame = removeSpeechFillers(message.text);
-            const textFrameSourceLang = sourceLang === "auto" ? "en" : sourceLang;
-            liveTranscriptBuffers.forEach((_buffer, targetLang) => {
-              void (async () => {
-                const document = transcriptDocuments.get(targetLang);
-                if (!document) return;
-                const publisher = createLiveCaptionPublisher({
-                  socket,
-                  channelSlug,
-                  sourceLang: targetLang,
-                  targetLang,
-                  targetLangScope: targetLang,
-                  document
-                });
-                const translation = await translateText(normalizedTextFrame, textFrameSourceLang, targetLang);
-                publisher(translation.translatedText, `Client Text Frame (${translation.engine})`);
-              })().catch((error) => {
-                recordTranslationError({
-                  error,
-                  text: normalizedTextFrame,
-                  sourceLang: textFrameSourceLang,
-                  targetLang
-                });
-                sendAudioLiveSocketMessage(socket, {
-                  type: "error",
-                  targetLang,
-                  message: "Client text frame translation failed."
-                });
-              });
+            sendAudioLiveSocketMessage(socket, {
+              type: "error",
+              message: "Gemini Live Translate accepts audio frames only; text frames are not translated on this endpoint."
             });
+            return;
           }
           if (message.type === "end") {
             liveTranscriptBuffers.forEach((liveTranscriptBuffer) => {
