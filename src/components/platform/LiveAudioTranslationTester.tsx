@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Radio, ScreenShare, Send, Square } from "lucide-react";
+import { Radio, ScreenShare, Square } from "lucide-react";
 
 interface LiveAudioTranslationTesterProps {
   channelSlug: string;
@@ -81,36 +81,6 @@ export default function LiveAudioTranslationTester({
     setIsCapturing(false);
     setStatusMessage("오디오 캡처 중지됨");
     pushDiagnosticEvent("capture stopped");
-  };
-
-  const publishSampleCaption = async () => {
-    try {
-      setStatusMessage("샘플 영어 자막을 caption queue에 전송 중");
-      pushDiagnosticEvent("publishing sample English caption");
-      const response = await fetch("/api/captions/publish", {
-        method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        channelSlug,
-        sourceLang: "en",
-          speaker: "Sample Test",
-          text: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk.",
-          isFinal: true
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`caption publish failed (${response.status})`);
-      }
-
-      const data = await response.json() as { caption?: { sequence?: number } };
-      setStatusMessage(`샘플 자막 전송됨 #${data.caption?.sequence ?? ""}`.trim());
-      pushDiagnosticEvent(`sample caption queued #${data.caption?.sequence ?? ""}`.trim());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setStatusMessage(message);
-      pushDiagnosticEvent(`sample caption error: ${message}`);
-    }
   };
 
   const startTabAudioCapture = async () => {
@@ -295,14 +265,6 @@ export default function LiveAudioTranslationTester({
           >
             {isCapturing ? <Square className="h-4 w-4" /> : <ScreenShare className="h-4 w-4" />}
             {isCapturing ? "캡처 중지" : "WebSocket 캡처 시작"}
-          </button>
-          <button
-            type="button"
-            onClick={publishSampleCaption}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <Send className="h-3.5 w-3.5" />
-            샘플 자막 전송
           </button>
         </div>
       </div>
