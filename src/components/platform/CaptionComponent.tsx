@@ -110,7 +110,6 @@ export default function CaptionComponent({
   useLayoutEffect(() => {
     const measureLatestCaption = () => {
       const measureElement = latestCaptionMeasureRef.current;
-      const viewportElement = latestCaptionViewportRef.current;
       if (!measureElement || !latestCaptionText) {
         setShouldShowOnlyLatestCaption(false);
         setLatestCaptionScroll({ shouldScroll: false, distancePx: 0, durationSeconds: 0 });
@@ -125,9 +124,9 @@ export default function CaptionComponent({
       }
 
       const textHeight = measureElement.scrollHeight;
-      const viewportHeight = viewportElement?.clientHeight ?? 0;
-      const shouldScroll = viewportHeight > 0 && textHeight > viewportHeight;
-      const scrollDistancePx = shouldScroll ? Math.ceil(textHeight - viewportHeight + lineHeight * 0.35) : 0;
+      const twoLineHeight = lineHeight * 2;
+      const shouldScroll = textHeight > twoLineHeight;
+      const scrollDistancePx = shouldScroll ? Math.ceil(textHeight - twoLineHeight + lineHeight * 0.35) : 0;
       const durationSeconds = shouldScroll ? Math.min(6, Math.max(2.8, scrollDistancePx / 42)) : 0;
 
       setShouldShowOnlyLatestCaption(textHeight > lineHeight * 1.45 || shouldScroll);
@@ -332,7 +331,11 @@ export default function CaptionComponent({
           {visibleCaptionLines.length === 0 ? (
             <p>&nbsp;</p>
           ) : (
-            <div ref={latestCaptionViewportRef} className="flex h-full min-h-0 flex-col justify-end gap-1 overflow-hidden">
+            <div
+              ref={latestCaptionViewportRef}
+              className="flex h-full min-h-0 flex-col justify-end overflow-hidden"
+              style={{ maxHeight: "2.75em" }}
+            >
               {visibleCaptionLines.map((line, index) => (
                 <p
                   key={`${line.key}:${line.comparisonKey}`}
