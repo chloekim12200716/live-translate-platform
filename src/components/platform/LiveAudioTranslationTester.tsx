@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Radio, ScreenShare, Square } from "lucide-react";
+import { appendAdminTokenToUrl } from "../../utils/adminAuth";
 
 interface LiveAudioTranslationTesterProps {
   channelSlug: string;
@@ -30,7 +31,7 @@ function createLiveAudioWebSocketUrl(channelSlug: string, translationMode: "real
     mimeType: "audio/pcm;rate=16000"
   });
 
-  return `${protocol}//${window.location.host}/api/audio/live?${params.toString()}`;
+  return appendAdminTokenToUrl(`${protocol}//${window.location.host}/api/audio/live?${params.toString()}`);
 }
 
 export default function LiveAudioTranslationTester({

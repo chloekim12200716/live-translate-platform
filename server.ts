@@ -723,8 +723,9 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
   const sourceLang = segment.sourceLang || subscriber.fallbackSourceLang;
   const isSameLanguage = sourceLang.toLowerCase() === subscriber.targetLang.toLowerCase();
   const isTargetedCaption = segment.targetLang === subscriber.targetLang;
+  const isUntargetedSourceCaption = !segment.targetLang;
 
-  if (!isSameLanguage && !isTargetedCaption) return;
+  if (!isSameLanguage && !isTargetedCaption && !isUntargetedSourceCaption) return;
 
   subscriber.writeEvent("caption", {
     id: segment.id,
@@ -733,7 +734,9 @@ function writeLiveCaptionEvent(subscriber: CaptionStreamSubscriber, segment: Liv
     speaker: segment.speaker,
     sourceText: segment.text,
     translatedText: segment.text,
-    engine: segment.isFinal ? "Live Translation Final" : "Live Translation Draft",
+    engine: isUntargetedSourceCaption
+      ? "Source Caption Broadcast"
+      : segment.isFinal ? "Live Translation Final" : "Live Translation Draft",
     sourceLang,
     targetLang: subscriber.targetLang,
     isFinal: segment.isFinal,

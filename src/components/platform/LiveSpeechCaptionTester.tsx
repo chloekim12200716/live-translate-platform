@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Mic, Radio, Square } from "lucide-react";
+import { adminFetch } from "../../utils/adminAuth";
 
 interface LiveSpeechCaptionTesterProps {
   channelSlug: string;
@@ -78,7 +79,7 @@ export default function LiveSpeechCaptionTester({
     const trimmedText = text.trim();
     if (!trimmedText) return;
 
-    const response = await fetch("/api/captions/publish", {
+    const response = await adminFetch("/api/captions/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

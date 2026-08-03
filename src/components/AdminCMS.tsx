@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Mic, MicOff, Settings, Languages, Plus, Trash2, Edit2, Play, Pause, Save, Check, RotateCcw, HelpCircle, BookOpen } from "lucide-react";
 import { Subtitle, DictionaryItem, AppState } from "../types";
+import { adminFetch } from "../utils/adminAuth";
 
 interface AdminCMSProps {
   appState: AppState;
@@ -105,7 +106,7 @@ export default function AdminCMS({
         if (isFinalResult) {
           try {
             // Post finished subtitle to server
-            await fetch("/api/subtitles/add", {
+            await adminFetch("/api/subtitles/add", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -162,7 +163,7 @@ export default function AdminCMS({
       let currentIndex = 0;
 
       // Clear existing first to make it a clean live simulation demo
-      fetch("/api/subtitles/clear", { method: "POST" })
+      adminFetch("/api/subtitles/clear", { method: "POST" })
         .then(() => {
           onUpdateState({ subtitles: [] });
           
@@ -178,7 +179,7 @@ export default function AdminCMS({
 
             try {
               // Add subtitle
-              await fetch("/api/subtitles/add", {
+              await adminFetch("/api/subtitles/add", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -220,7 +221,7 @@ export default function AdminCMS({
 
   const handleSaveEdit = async (id: string) => {
     try {
-      const response = await fetch("/api/subtitles/update", {
+      const response = await adminFetch("/api/subtitles/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, original: editOrigText, translated: editTransText })
@@ -245,7 +246,7 @@ export default function AdminCMS({
     try {
       const trans = newTransText.trim() || newOrigText;
 
-      const addRes = await fetch("/api/subtitles/add", {
+      const addRes = await adminFetch("/api/subtitles/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -276,7 +277,7 @@ export default function AdminCMS({
     if (!dictTerm.trim() || !dictDef.trim()) return;
 
     try {
-      const response = await fetch("/api/dictionary", {
+      const response = await adminFetch("/api/dictionary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ term: dictTerm, definition: dictDef, category: dictCat })
@@ -293,7 +294,7 @@ export default function AdminCMS({
 
   const handleClearAllSubtitles = async () => {
     if (confirm("송출된 모든 자막 스트림을 초기화하시겠습니까?")) {
-      await fetch("/api/subtitles/clear", { method: "POST" });
+      await adminFetch("/api/subtitles/clear", { method: "POST" });
       onUpdateState({ subtitles: [] });
     }
   };

@@ -24,6 +24,7 @@ import {
   saveStoredPlatformDisplays
 } from "../../data/platformLayoutStorage";
 import LiveAudioTranslationTester from "../../components/platform/LiveAudioTranslationTester";
+import { adminFetch } from "../../utils/adminAuth";
 
 const captionPlayerOptions = {
   languages: ["Arabic", "Chinese", "English", "French", "Korean", "Russian", "Spanish"],
@@ -152,14 +153,14 @@ export default function AdminChannelsPage() {
   }, [selectedChannel.slug]);
 
   const loadTranslationErrors = () => {
-    fetch("/api/translation-errors?limit=5")
+    adminFetch("/api/translation-errors?limit=5")
       .then((response) => response.json())
       .then((data: { errors?: TranslationErrorLog[] }) => setTranslationErrors(data.errors ?? []))
       .catch(() => setTranslationErrors([]));
   };
 
   const loadTranscriptDocuments = () => {
-    fetch(`/api/captions/transcripts?channelSlug=${encodeURIComponent(selectedChannel.slug)}&limit=5`)
+    adminFetch(`/api/captions/transcripts?channelSlug=${encodeURIComponent(selectedChannel.slug)}&limit=5`)
       .then((response) => response.json())
       .then((data: { documents?: TranscriptDocumentSummary[] }) => setTranscriptDocuments(data.documents ?? []))
       .catch(() => setTranscriptDocuments([]));
@@ -303,7 +304,7 @@ export default function AdminChannelsPage() {
   };
 
   const handleClearTranslationErrors = () => {
-    fetch("/api/translation-errors", { method: "DELETE" })
+    adminFetch("/api/translation-errors", { method: "DELETE" })
       .then(() => loadTranslationErrors())
       .catch(() => undefined);
   };

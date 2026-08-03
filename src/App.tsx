@@ -13,6 +13,7 @@ import DemoPage from "./pages/demo/DemoPage";
 import LiveChannelPage from "./pages/live/LiveChannelPage";
 import { AppDataContext } from "./types/appContext";
 import { AppState, DictionaryItem } from "./types";
+import { adminFetch } from "./utils/adminAuth";
 
 function RoutedApp(appData: AppDataContext) {
   return (
@@ -93,7 +94,7 @@ export default function App() {
     try {
       setAppState((prev) => ({ ...prev, ...updates } as AppState));
 
-      await fetch("/api/state", {
+      await adminFetch("/api/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates)
@@ -105,7 +106,7 @@ export default function App() {
 
   const handleAddQA = async (text: string, user: string) => {
     try {
-      const res = await fetch("/api/qa", {
+      const res = await adminFetch("/api/qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, user })
@@ -118,7 +119,7 @@ export default function App() {
 
   const handleAnswerQA = async (id: string, answer: string) => {
     try {
-      const res = await fetch("/api/qa/answer", {
+      const res = await adminFetch("/api/qa/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, answer })
@@ -131,7 +132,7 @@ export default function App() {
 
   const handleAddBookmark = async (title: string) => {
     try {
-      const res = await fetch("/api/bookmarks", {
+      const res = await adminFetch("/api/bookmarks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ timestamp: appState.currentVideoTime, title })
@@ -144,7 +145,7 @@ export default function App() {
 
   const handleDeleteBookmark = async (id: string) => {
     try {
-      const res = await fetch("/api/bookmarks/delete", {
+      const res = await adminFetch("/api/bookmarks/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id })
@@ -157,7 +158,7 @@ export default function App() {
 
   const handleAddNote = async (text: string) => {
     try {
-      const res = await fetch("/api/notes", {
+      const res = await adminFetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ timestamp: appState.currentVideoTime, text })
@@ -170,7 +171,7 @@ export default function App() {
 
   const handleDeleteNote = async (id: string) => {
     try {
-      const res = await fetch("/api/notes/delete", {
+      const res = await adminFetch("/api/notes/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id })

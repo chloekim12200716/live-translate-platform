@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Search, Clock, Bookmark, BookOpen, FileText, Sparkles, Plus, Trash2, Edit3, CheckCircle2 } from "lucide-react";
 import { Subtitle, Bookmark as BookmarkType, Note as NoteType } from "../types";
+import { adminFetch } from "../utils/adminAuth";
 
 interface TranscriptSidebarProps {
   subtitles: Subtitle[];
@@ -48,7 +49,7 @@ export default function TranscriptSidebar({
   const handleFetchAiSummary = async () => {
     setIsAiLoading(true);
     try {
-      const response = await fetch("/api/summarize", {
+      const response = await adminFetch("/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
