@@ -654,51 +654,49 @@ export default function ChannelLayoutEditorPage() {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900">1. 화면 구성 예시</h3>
-                <p className="text-xs text-slate-500">{layout.name} · Grid {layout.columns} x {layout.rows}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {savedAt && <span className="text-xs font-semibold text-emerald-600">저장됨 {savedAt}</span>}
-                <label className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
-                  배경 이미지 선택
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleBackgroundFileChange}
-                    className="sr-only"
-                  />
-                </label>
-              </div>
-            </div>
-
-            <LayoutCanvas
-              layout={layout}
-              selectedComponentId={selectedComponentId}
-              draggingComponentId={draggingComponentId}
-              resizingComponentId={resizingComponentId}
-              isBackgroundDragActive={isBackgroundDragActive}
-              gridRef={gridRef}
-              onBackgroundDragActiveChange={setIsBackgroundDragActive}
-              onBackgroundDrop={handleBackgroundDrop}
-              onSelectComponent={setSelectedComponentId}
-              onStartDrag={handleStartDrag}
-              onStartResize={handleStartResize}
-              onComponentKeyDown={handleComponentKeyDown}
-              onDeleteComponent={handleDeleteComponent}
-            />
-
-            <BackgroundSettingsPanel
-              layout={layout}
-              onLayoutChange={setLayout}
-            />
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">1. 화면 구성 예시</h3>
+            <p className="text-xs text-slate-500">{layout.name} · Grid {layout.columns} x {layout.rows}</p>
           </div>
-        </main>
+          <div className="flex flex-wrap items-center gap-2">
+            {savedAt && <span className="text-xs font-semibold text-emerald-600">저장됨 {savedAt}</span>}
+            <label className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
+              배경 이미지 선택
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBackgroundFileChange}
+                className="sr-only"
+              />
+            </label>
+          </div>
+        </div>
 
+        <LayoutCanvas
+          layout={layout}
+          selectedComponentId={selectedComponentId}
+          draggingComponentId={draggingComponentId}
+          resizingComponentId={resizingComponentId}
+          isBackgroundDragActive={isBackgroundDragActive}
+          gridRef={gridRef}
+          onBackgroundDragActiveChange={setIsBackgroundDragActive}
+          onBackgroundDrop={handleBackgroundDrop}
+          onSelectComponent={setSelectedComponentId}
+          onStartDrag={handleStartDrag}
+          onStartResize={handleStartResize}
+          onComponentKeyDown={handleComponentKeyDown}
+          onDeleteComponent={handleDeleteComponent}
+        />
+
+        <BackgroundSettingsPanel
+          layout={layout}
+          onLayoutChange={setLayout}
+        />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
         <div className="space-y-4">
           <ComponentListPanel
             components={layout.components}
@@ -707,6 +705,8 @@ export default function ChannelLayoutEditorPage() {
             onSelectComponent={setSelectedComponentId}
             onDeleteComponent={handleDeleteComponent}
           />
+        </div>
+        <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-indigo-600" />
@@ -724,7 +724,7 @@ export default function ChannelLayoutEditorPage() {
             onDeleteSelectedComponent={handleDeleteSelectedComponent}
           />
         </div>
-      </div>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
