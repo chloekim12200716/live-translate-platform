@@ -93,7 +93,7 @@ export const mockPlatformChannel: PlatformChannel = {
   notes: "의학 학술행사 기본 테스트 채널",
   sourceLanguageCode: "en",
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-  sampleCaptionText: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
+  sampleCaptionText: "",
   mode: "live",
   slides: [
     {

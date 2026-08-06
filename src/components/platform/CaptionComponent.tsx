@@ -5,16 +5,6 @@ import {
   PlatformCaptionStyle
 } from "../../data/mockPlatformData";
 
-const captionByLanguage: Record<string, string> = {
-  ar: "سنراجع اليوم النتائج السريرية للعلاجات مزدوجة الهدف وتأثيرها على حماية القلب والكلى.",
-  zh: "今天我们将回顾双靶向治疗的临床试验，以及其对心血管和肾脏保护的意义。",
-  en: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
-  fr: "Aujourd'hui, nous allons examiner les essais cliniques des thérapies à double cible et leur impact cardiométabolique.",
-  ko: "오늘 우리는 이중 표적 치료제의 임상 시험과 심혈관 대사 영향에 대해 검토하겠습니다.",
-  ru: "Сегодня мы рассмотрим клинические исследования препаратов двойного действия и их кардиометаболическое значение.",
-  es: "Hoy revisaremos los ensayos clínicos de las terapias de doble objetivo y su impacto cardiometabólico."
-};
-
 interface CaptionComponentProps {
   languageCode: string;
   channelSlug: string;
@@ -23,7 +13,6 @@ interface CaptionComponentProps {
   style?: PlatformCaptionStyle;
   isOverlay?: boolean;
   transparentBackground?: boolean;
-  enableMockFallback?: boolean;
 }
 
 interface StreamCaptionPayload {
@@ -60,18 +49,16 @@ function getCaptionComparisonKey(text: string) {
 function getCaptionDisplayText({
   translatedText,
   sourceText,
-  fallbackCaption,
   isFinal,
   shouldShowSourceText
 }: {
   translatedText: string;
   sourceText?: string;
-  fallbackCaption: string;
   isFinal?: boolean;
   shouldShowSourceText: boolean;
 }) {
   if (translatedText) return translatedText;
-  if (isFinal && shouldShowSourceText) return sourceText || fallbackCaption;
+  if (isFinal && shouldShowSourceText) return sourceText || "";
   return "";
 }
 
@@ -82,19 +69,14 @@ export default function CaptionComponent({
   sourceText,
   style,
   isOverlay = false,
-  transparentBackground = false,
-  enableMockFallback = false
+  transparentBackground = false
 }: CaptionComponentProps) {
   const normalizedLanguage = languageCode.toLowerCase();
   const normalizedSourceLanguage = sourceLanguageCode.toLowerCase();
   const captionStyle = { ...defaultCaptionStyle, ...style };
-  const fallbackCaption = normalizedLanguage === normalizedSourceLanguage
-    ? sourceText
-    : captionByLanguage[normalizedLanguage] ?? captionByLanguage.en;
-  const shouldUseMockFallback = enableMockFallback && !isOverlay;
-  const [captionLines, setCaptionLines] = useState<CaptionLine[]>(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+  const [captionLines, setCaptionLines] = useState<CaptionLine[]>([]);
   const [draftCaptionLine, setDraftCaptionLine] = useState<CaptionLine | null>(null);
-  const [engine, setEngine] = useState(shouldUseMockFallback ? "Local Mock Caption" : "Caption Queue");
+  const [engine, setEngine] = useState("Caption Queue");
   const [isLoading, setIsLoading] = useState(false);
   const [sequence, setSequence] = useState(0);
   const latestCaptionMeasureRef = useRef<HTMLParagraphElement>(null);
@@ -154,7 +136,7 @@ export default function CaptionComponent({
     const controller = new AbortController();
     let eventSource: EventSource | null = null;
 
-    setCaptionLines(shouldUseMockFallback && fallbackCaption ? [createCaptionLine(fallbackCaption, "fallback")] : []);
+    setCaptionLines([]);
     setDraftCaptionLine(null);
     setIsLoading(true);
     setSequence(0);
@@ -189,7 +171,6 @@ export default function CaptionComponent({
       const nextCaption = getCaptionDisplayText({
         translatedText,
         sourceText: data.sourceText,
-        fallbackCaption,
         isFinal: data.isFinal,
         shouldShowSourceText
       });
@@ -253,7 +234,7 @@ export default function CaptionComponent({
         eventSource.close();
       }
     };
-  }, [channelSlug, fallbackCaption, normalizedLanguage, normalizedSourceLanguage, shouldUseMockFallback, sourceText]);
+  }, [channelSlug, normalizedLanguage, normalizedSourceLanguage]);
 
   const visibleCaptionLines = draftCaptionLine
     ? [draftCaptionLine]
@@ -261,6 +242,9 @@ export default function CaptionComponent({
     ? captionLines.slice(-1)
     : captionLines.slice(-2);
   const shouldUseTransparentTextBackground = transparentBackground || captionStyle.textBackgroundTransparent;
+  const emptyCaptionText = engine.includes("Disconnected") || engine.includes("Unavailable")
+    ? "자막을 불러오지 못했습니다"
+    : isLoading ? "자막 연결 대기 중" : "자막 수신 대기 중";
 
   return (
     <div
@@ -293,7 +277,7 @@ export default function CaptionComponent({
             {latestCaptionText}
           </p>
           {visibleCaptionLines.length === 0 ? (
-            <p>&nbsp;</p>
+            <p className="text-[0.65em] font-semibold opacity-70">{emptyCaptionText}</p>
           ) : (
             <div
               ref={latestCaptionViewportRef}

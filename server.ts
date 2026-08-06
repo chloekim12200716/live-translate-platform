@@ -105,12 +105,14 @@ function getFallbackTranslation(text: string, sourceLang: string | undefined, ta
     return text;
   }
 
+  return "";
+
   const sampleMedicalTranslations: Record<string, string> = {
     ar: "سنراجع اليوم التجارب السريرية للعلاجات مزدوجة الهدف وتأثيرها القلبي الأيضي.",
     zh: "今天我们将回顾双靶向治疗的临床试验及其对心血管代谢的影响。",
-    en: "Today we will review the clinical trials of dual-targeting therapies and their cardiometabolic impact.",
+    en: "",
     fr: "Aujourd'hui, nous allons examiner les essais cliniques des thérapies à double cible et leur impact cardiométabolique.",
-    ko: "오늘 우리는 이중 표적 치료제의 임상 시험과 심혈관 대사 영향에 대해 검토하겠습니다.",
+    ko: "",
     ru: "Сегодня мы рассмотрим клинические исследования препаратов двойного действия и их кардиометаболическое влияние.",
     es: "Hoy revisaremos los ensayos clínicos de las terapias de doble objetivo y su impacto cardiometabólico."
   };
@@ -187,7 +189,7 @@ function getFallbackTranslation(text: string, sourceLang: string | undefined, ta
     normalizedSourceLang === "en" &&
     (text.includes("dual-targeting therapies") || text.includes("cardiometabolic impact"))
   ) {
-    return sampleMedicalTranslations[normalizedTargetLang] || `[AI Demo Translation:${normalizedTargetLang}] ${text}`;
+    return sampleMedicalTranslations[normalizedTargetLang] || "";
   }
 
   if (normalizedSourceLang === "en" && normalizedTargetLang === "ko") {
@@ -234,7 +236,7 @@ function getFallbackTranslation(text: string, sourceLang: string | undefined, ta
     .map((item) => item.term);
   const detectedTermLabel = detectedTerms.length > 0 ? ` (medical terms: ${detectedTerms.join(", ")})` : "";
 
-  return `[AI Demo Translation:${normalizedTargetLang}] ${text}${detectedTermLabel}`;
+  return "";
 }
 
 interface TranslationResult {
@@ -303,7 +305,7 @@ function createFallbackTranslationResult(
   text: string,
   sourceLang: string,
   targetLang: string,
-  engine = "Rule-based Medical Dict Engine"
+  engine = "Translation Unavailable"
 ): TranslationResult {
   return {
     translatedText: getFallbackTranslation(text, sourceLang, targetLang),
@@ -314,8 +316,7 @@ function createFallbackTranslationResult(
 }
 
 function isFallbackTranslationResult(result: TranslationResult) {
-  return result.engine.startsWith("Rule-based")
-    || result.translatedText.startsWith("[AI Demo Translation:");
+  return result.engine.startsWith("Translation Unavailable");
 }
 
 function recordTranslationError({
@@ -388,7 +389,7 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
         text,
         normalizedSourceLang,
         normalizedTargetLang,
-        `Rule-based Medical Dict Engine (Gemini quota cooldown ${cooldownSeconds}s)`
+        `Translation Unavailable (Gemini quota cooldown ${cooldownSeconds}s)`
       );
     }
 
@@ -435,7 +436,7 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
       if (shouldLogNow) {
         lastGeminiTranslationConsoleLogAt = Date.now();
         if (errorStatus === 429) {
-          console.warn("Gemini translation quota exceeded. Falling back until retry window clears.");
+          console.warn("Gemini translation quota exceeded. Suppressing translated captions until retry window clears.");
         } else {
           console.error("Gemini Translation Error:", error);
         }
@@ -448,8 +449,8 @@ Output ONLY the direct translation. Do not include extra comments, intros, or ex
     normalizedSourceLang,
     normalizedTargetLang,
     Date.now() < geminiTranslationBackoffUntil
-      ? "Rule-based Medical Dict Engine (Gemini quota exceeded)"
-      : "Rule-based Medical Dict Engine"
+      ? "Translation Unavailable (Gemini quota exceeded)"
+      : "Translation Unavailable"
   );
   })();
 
@@ -806,32 +807,10 @@ let appState = {
   layout: "split",     // "split" | "speaker" | "slide"
   currentVideoTime: 0,
   subtitles: [] as Subtitle[],
-  qaList: [
-    { id: "qa-1", user: "김의학 박사", text: "GLP-1과 SGLT2 억제제를 병용 투여할 때 신장 보호 효과의 시너지는 임상적으로 입증되었나요?", timestamp: "18:22", isAnswered: true, answer: "네, 최근 심혈관 및 신장 보호 임상 데이터에 따르면 다중 경로 조절을 통해 신장 악화 예방에 상호 보완적인 시너지를 보이고 있습니다." },
-    { id: "qa-2", user: "Lee MD", text: "What is the recommended eGFR cutoff for empagliflozin initiation in clinical practice?", timestamp: "18:25", isAnswered: false }
-  ] as QAItem[],
-  bookmarks: [
-    { id: "bm-1", timestamp: 45, title: "이중 표적 치료제의 임상 진행 설명 시작" },
-    { id: "bm-2", timestamp: 120, title: "SGLT2 억제제와 eGFR 신장 수치 설명" }
-  ] as Bookmark[],
-  notes: [
-    { id: "nt-1", timestamp: 48, text: "임상 3상 진행 상황 체크할 것." },
-    { id: "nt-2", timestamp: 130, text: "eGFR 저하 환자 처방 기준 60 미만 체크." }
-  ] as Note[]
+  qaList: [] as QAItem[],
+  bookmarks: [] as Bookmark[],
+  notes: [] as Note[]
 };
-
-// Seed subtitles if empty
-const seedSubtitles = () => {
-  appState.subtitles = [
-    { id: "sub-1", timestamp: 10, speaker: "Dr. Robert", original: "Good evening, colleagues. Today we will review the clinical trials of dual-targeting therapies.", translated: "안녕하십니까, 동료 여러분. 오늘 우리는 이중 표적 치료제의 임상 시험을 검토할 것입니다.", isFinal: true },
-    { id: "sub-2", timestamp: 25, speaker: "Dr. Robert", original: "We will focus on patients presenting with type 2 diabetes and high cardiovascular risk.", translated: "우리는 제2형 당뇨병과 높은 심혈관 위험을 동반한 환자들에게 초점을 맞출 것입니다.", isFinal: true },
-    { id: "sub-3", timestamp: 45, speaker: "Dr. Robert", original: "Specifically, looking at how GLP-1 receptor agonist alters metabolic functions.", translated: "특히, GLP-1 수용체 작용제가 어떻게 대사 기능을 변화시키는지 살펴보겠습니다.", isFinal: true },
-    { id: "sub-4", timestamp: 65, speaker: "Dr. Robert", original: "The primary endpoint was evaluated over a period of 48 weeks.", translated: "1차 평가변수는 48주의 기간 동안 평가되었습니다.", isFinal: true },
-    { id: "sub-5", timestamp: 85, speaker: "Dr. Robert", original: "We also analyzed the risk of any serious adverse event in the treatment group.", translated: "우리는 또한 치료군에서 심각한 이상사례가 발생할 위험을 분석했습니다.", isFinal: true }
-  ];
-};
-
-seedSubtitles();
 
 // API Endpoints
 app.get("/api/state", (req, res) => {

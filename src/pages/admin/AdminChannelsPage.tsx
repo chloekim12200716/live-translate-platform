@@ -204,7 +204,7 @@ export default function AdminChannelsPage() {
       notes: newChannelNotes.trim(),
       sourceLanguageCode: "auto",
       videoUrl: mockPlatformChannel.videoUrl,
-      sampleCaptionText: `${title}의 실시간 자막 테스트 문장입니다.`,
+      sampleCaptionText: "",
       mode: "live",
       slides: []
     };
@@ -692,7 +692,7 @@ export default function AdminChannelsPage() {
                 <p className="text-xs font-bold uppercase tracking-widest text-rose-600">Translation API Logs</p>
                 <h3 className="text-lg font-bold text-slate-900">번역 API 통신 오류</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Gemini 호출 실패나 timeout이 발생하면 fallback으로 전환하고 여기에 최근 오류를 기록합니다.
+                  Gemini 호출 실패나 timeout이 발생하면 자막을 임의 생성하지 않고 여기에 최근 오류를 기록합니다.
                 </p>
               </div>
               <button
