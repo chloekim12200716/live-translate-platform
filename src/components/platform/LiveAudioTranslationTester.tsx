@@ -122,6 +122,9 @@ export default function LiveAudioTranslationTester({
           sequence?: number;
           targetLang?: string;
           targetLangs?: string[];
+          activeTargetLangs?: string[];
+          delayMs?: number;
+          bufferedFrames?: number;
           code?: number;
           reason?: string;
           wasClean?: boolean;
@@ -132,11 +135,13 @@ export default function LiveAudioTranslationTester({
 
         if (data.type === "ready") {
           setStatusMessage("오디오 frame 전송 중");
-          pushDiagnosticEvent(`server ready (${data.targetLangs?.join(",") || "targets"}), sending audio frames`);
+          pushDiagnosticEvent(`server ready (${data.activeTargetLangs?.join(",") || data.targetLangs?.join(",") || "targets"}), sending audio frames`);
         } else if (data.type === "open") {
-          pushDiagnosticEvent("Gemini Live connection opened");
+          pushDiagnosticEvent(`Gemini Live connection opened${data.targetLang ? ` [${data.targetLang}]` : ""}`);
         } else if (data.type === "connecting") {
           pushDiagnosticEvent(data.message || "connecting to Gemini Live");
+        } else if (data.type === "reconnecting") {
+          pushDiagnosticEvent(`reconnecting${data.targetLang ? ` [${data.targetLang}]` : ""} in ${Math.round(data.delayMs ?? 0)}ms (${data.bufferedFrames ?? 0} buffered)`);
         } else if (data.type === "debug") {
           pushDiagnosticEvent(data.message || "debug event");
         } else if (data.type === "caption" && data.transcript) {

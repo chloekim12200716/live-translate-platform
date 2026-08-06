@@ -29,6 +29,9 @@ const MAX_CAPTION_TEXT_LENGTH = Number(process.env.MAX_CAPTION_TEXT_LENGTH || 50
 const MAX_SHORT_INPUT_LENGTH = 120;
 const MAX_MEDIUM_INPUT_LENGTH = 1000;
 const MAX_LIVE_AUDIO_FRAME_BYTES = Number(process.env.MAX_LIVE_AUDIO_FRAME_BYTES || 262144);
+const MAX_LIVE_RECONNECT_BUFFER_FRAMES = Number(process.env.MAX_LIVE_RECONNECT_BUFFER_FRAMES || 240);
+const LIVE_RECONNECT_BASE_DELAY_MS = Number(process.env.LIVE_RECONNECT_BASE_DELAY_MS || 1000);
+const LIVE_RECONNECT_MAX_DELAY_MS = Number(process.env.LIVE_RECONNECT_MAX_DELAY_MS || 15000);
 const MAX_LIVE_TARGET_LANGUAGE_COUNT = Number(process.env.MAX_LIVE_TARGET_LANGUAGE_COUNT || 7);
 const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || "ar,zh,en,fr,ko,ru,es")
   .split(",")
@@ -1261,6 +1264,11 @@ interface LiveServerMessageLike {
   goAway?: {
     timeLeft?: string;
   };
+  sessionResumptionUpdate?: {
+    lastConsumedClientMessageIndex?: string | number;
+    newHandle?: string;
+    resumable?: boolean;
+  };
   usageMetadata?: unknown;
   voiceActivity?: unknown;
   voiceActivityDetectionSignal?: unknown;
@@ -1741,6 +1749,14 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
     const mimeType = requestUrl.searchParams.get("mimeType") || "audio/webm;codecs=opus";
     const pendingFrames: Buffer[] = [];
     const liveConnections = new Map<string, GeminiLiveConnectionLike>();
+    const targetPendingFrames = new Map<string, Buffer[]>();
+    const connectionStates = new Map<string, {
+      reconnectAttempts: number;
+      reconnectTimer: ReturnType<typeof setTimeout> | null;
+      sessionHandle: string;
+      generation: number;
+      reconnecting: boolean;
+    }>();
     const liveTranscriptBuffers = new Map<string, ReturnType<typeof createLiveTranscriptBuffer>>();
     const transcriptDocuments = new Map<string, LiveTranscriptDocument>();
     let isClosed = false;
@@ -1768,24 +1784,83 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       }));
     });
 
+    const getConnectionState = (targetLang: string) => {
+      const existingState = connectionStates.get(targetLang);
+      if (existingState) return existingState;
+
+      const nextState = {
+        reconnectAttempts: 0,
+        reconnectTimer: null,
+        sessionHandle: "",
+        generation: 0,
+        reconnecting: false
+      };
+      connectionStates.set(targetLang, nextState);
+      return nextState;
+    };
+
+    const bufferFrameForTarget = (targetLang: string, frame: Buffer) => {
+      const frames = targetPendingFrames.get(targetLang) ?? [];
+      frames.push(frame);
+      while (frames.length > MAX_LIVE_RECONNECT_BUFFER_FRAMES) {
+        frames.shift();
+      }
+      targetPendingFrames.set(targetLang, frames);
+    };
+
+    const sendFrameToLiveConnection = (liveConnection: GeminiLiveConnectionLike, frame: Buffer) => {
+      liveConnection.sendRealtimeInput({
+        audio: {
+          data: frame.toString("base64"),
+          mimeType
+        }
+      });
+    };
+
     const sendFrameToLiveConnections = (frame: Buffer) => {
-      liveConnections.forEach((liveConnection) => {
+      targetLangs.forEach((targetLang) => {
+        const liveConnection = liveConnections.get(targetLang);
+        if (!liveConnection) {
+          bufferFrameForTarget(targetLang, frame);
+          return;
+        }
+
         try {
-          liveConnection.sendRealtimeInput({
-            audio: {
-              data: frame.toString("base64"),
-              mimeType
-            }
-          });
+          sendFrameToLiveConnection(liveConnection, frame);
         } catch (error) {
+          bufferFrameForTarget(targetLang, frame);
           recordTranslationError({
             error,
             text: "[Gemini Live audio frame send]",
             sourceLang,
-            targetLang: "live-transcription"
+            targetLang
           });
         }
       });
+    };
+
+    const flushTargetPendingFrames = (targetLang: string) => {
+      const liveConnection = liveConnections.get(targetLang);
+      if (!liveConnection) return;
+      const frames = targetPendingFrames.get(targetLang);
+      if (!frames?.length) return;
+
+      while (frames.length > 0) {
+        const frame = frames.shift();
+        if (!frame) continue;
+        try {
+          sendFrameToLiveConnection(liveConnection, frame);
+        } catch (error) {
+          frames.unshift(frame);
+          recordTranslationError({
+            error,
+            text: "[Gemini Live buffered audio frame send]",
+            sourceLang,
+            targetLang
+          });
+          break;
+        }
+      }
     };
 
     const flushPendingFrames = () => {
@@ -1798,7 +1873,41 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
       }
     };
 
-    const connectLiveConnection = async (targetLang: string) => {
+    const parseLiveTimeLeftMs = (timeLeft: string | undefined) => {
+      if (!timeLeft) return 0;
+      const secondsMatch = timeLeft.match(/([\d.]+)s/i);
+      if (secondsMatch) return Number(secondsMatch[1]) * 1000;
+      const millisMatch = timeLeft.match(/([\d.]+)ms/i);
+      if (millisMatch) return Number(millisMatch[1]);
+      const numericValue = Number(timeLeft);
+      return Number.isFinite(numericValue) ? numericValue : 0;
+    };
+
+    const scheduleReconnect = (targetLang: string, reason: string, delayMs?: number) => {
+      if (isClosed) return;
+      const state = getConnectionState(targetLang);
+      if (state.reconnectTimer || state.reconnecting) return;
+
+      const attemptDelayMs = delayMs ?? Math.min(
+        LIVE_RECONNECT_MAX_DELAY_MS,
+        LIVE_RECONNECT_BASE_DELAY_MS * Math.max(1, 2 ** Math.min(state.reconnectAttempts, 4))
+      );
+      state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null;
+        void connectLiveConnection(targetLang, reason);
+      }, Math.max(0, attemptDelayMs));
+
+      sendAudioLiveSocketMessage(socket, {
+        type: "reconnecting",
+        targetLang,
+        reason,
+        delayMs: attemptDelayMs,
+        bufferedFrames: targetPendingFrames.get(targetLang)?.length ?? 0
+      });
+    };
+
+    const connectLiveConnection = async (targetLang: string, reconnectReason = "initial") => {
+      if (isClosed) return;
       if (!liveAiClient) {
         sendAudioLiveSocketMessage(socket, {
           type: "error",
@@ -1808,12 +1917,27 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         return;
       }
 
+      const state = getConnectionState(targetLang);
+      state.reconnecting = true;
+      state.generation += 1;
+      const connectionGeneration = state.generation;
+      const previousConnection = liveConnections.get(targetLang);
+      if (previousConnection) {
+        liveConnections.delete(targetLang);
+        try {
+          previousConnection.close();
+        } catch {
+          // Replacing an old Live connection should not stop the browser stream.
+        }
+      }
+
       try {
         sendAudioLiveSocketMessage(socket, {
           type: "connecting",
           model: GEMINI_LIVE_MODEL,
           targetLang,
-          message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, input=auto, target=${getLiveTranslateTargetLanguageCode(targetLang)}, mode=${translationMode}`
+          resumable: Boolean(state.sessionHandle),
+          message: `Live Translate setup: model=${GEMINI_LIVE_MODEL}, apiVersion=${GEMINI_LIVE_API_VERSION}, input=auto, target=${getLiveTranslateTargetLanguageCode(targetLang)}, mode=${translationMode}${state.sessionHandle ? ", resume=true" : ""}, reason=${reconnectReason}`
         });
 
         const liveConnection = await (liveAiClient as any).live.connect({
@@ -1822,6 +1946,13 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
             responseModalities: ["AUDIO"],
             inputAudioTranscription: {},
             outputAudioTranscription: {},
+            contextWindowCompression: {
+              slidingWindow: {}
+            },
+            sessionResumption: {
+              ...(state.sessionHandle ? { handle: state.sessionHandle } : {}),
+              transparent: true
+            },
             translationConfig: {
               targetLanguageCode: getLiveTranslateTargetLanguageCode(targetLang),
               echoTargetLanguage: true
@@ -1829,14 +1960,38 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           },
           callbacks: {
             onopen: () => {
+              if (connectionGeneration !== getConnectionState(targetLang).generation) return;
               sendAudioLiveSocketMessage(socket, {
                 type: "open",
                 model: GEMINI_LIVE_MODEL,
-                targetLang
+                targetLang,
+                resumed: Boolean(state.sessionHandle)
               });
             },
             onmessage: (message: LiveServerMessageLike) => {
+              if (connectionGeneration !== getConnectionState(targetLang).generation) return;
               liveServerMessageCount += 1;
+              const sessionResumptionUpdate = message.sessionResumptionUpdate;
+              if (sessionResumptionUpdate?.resumable && sessionResumptionUpdate.newHandle) {
+                state.sessionHandle = sessionResumptionUpdate.newHandle;
+                sendAudioLiveSocketMessage(socket, {
+                  type: "debug",
+                  targetLang,
+                  message: `session resumption handle updated${sessionResumptionUpdate.lastConsumedClientMessageIndex !== undefined ? `, consumed=${sessionResumptionUpdate.lastConsumedClientMessageIndex}` : ""}`
+                });
+              }
+
+              if (message.goAway) {
+                const timeLeftMs = parseLiveTimeLeftMs(message.goAway.timeLeft);
+                const reconnectDelayMs = timeLeftMs > 2500 ? timeLeftMs - 2000 : 500;
+                sendAudioLiveSocketMessage(socket, {
+                  type: "debug",
+                  targetLang,
+                  message: `Gemini Live GoAway received; reconnecting in ${Math.round(reconnectDelayMs)}ms`
+                });
+                scheduleReconnect(targetLang, "go-away", reconnectDelayMs);
+              }
+
               const forwardedAudioChunks = broadcastLiveTranslatedAudio(channelSlug, targetLang, message);
               liveTranscriptBuffers.get(targetLang)?.handleLiveMessage(message);
 
@@ -1851,6 +2006,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
               }
             },
             onerror: (error: Error) => {
+              if (connectionGeneration !== getConnectionState(targetLang).generation) return;
               const message = error instanceof Error ? error.message : String(error);
               recordTranslationError({
                 error,
@@ -1863,10 +2019,14 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
                 targetLang,
                 message
               });
+              scheduleReconnect(targetLang, "error");
             },
             onclose: (event: { code?: number; reason?: string; wasClean?: boolean }) => {
+              if (connectionGeneration !== getConnectionState(targetLang).generation) return;
               const closeCode = event?.code;
               const closeReason = event?.reason || "";
+              liveConnections.delete(targetLang);
+              state.reconnecting = false;
               sendAudioLiveSocketMessage(socket, {
                 type: "closed",
                 targetLang,
@@ -1874,6 +2034,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
                 reason: closeReason,
                 wasClean: event?.wasClean
               });
+              scheduleReconnect(targetLang, closeReason || `close-${closeCode ?? "unknown"}`);
             }
           }
         });
@@ -1882,8 +2043,17 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           liveConnection.close();
           return;
         }
+        if (connectionGeneration !== getConnectionState(targetLang).generation) {
+          liveConnection.close();
+          return;
+        }
         liveConnections.set(targetLang, liveConnection);
+        state.reconnecting = false;
+        state.reconnectAttempts = 0;
+        flushTargetPendingFrames(targetLang);
       } catch (error) {
+        state.reconnecting = false;
+        state.reconnectAttempts += 1;
         recordTranslationError({
           error,
           text: "[Gemini Live audio connect]",
@@ -1895,6 +2065,7 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
           targetLang,
           message: error instanceof Error ? error.message : String(error)
         });
+        scheduleReconnect(targetLang, "connect-failed");
       }
     };
 
@@ -1906,17 +2077,13 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         return;
       }
 
-      if (liveConnections.size === 0) {
-        socket.close(1011, "Gemini Live connection failed");
-        return;
-      }
-
       isReadyToSendFrames = true;
       sendAudioLiveSocketMessage(socket, {
         type: "ready",
         channelSlug,
         sourceLang,
-        targetLangs: Array.from(liveConnections.keys()),
+        targetLangs,
+        activeTargetLangs: Array.from(liveConnections.keys()),
         mimeType,
         mode: translationMode,
         transcriptDocumentIds: Array.from(transcriptDocuments.values()).map((document) => document.id)
@@ -1989,6 +2156,15 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
 
     socket.on("close", () => {
       isClosed = true;
+      connectionStates.forEach((state) => {
+        if (state.reconnectTimer) {
+          clearTimeout(state.reconnectTimer);
+          state.reconnectTimer = null;
+        }
+        state.reconnecting = false;
+      });
+      targetPendingFrames.clear();
+      pendingFrames.splice(0, pendingFrames.length);
       void Promise.all(Array.from(liveTranscriptBuffers.values()).map((liveTranscriptBuffer) => liveTranscriptBuffer.flush("socket-close")))
         .finally(() => {
           liveTranscriptBuffers.forEach((liveTranscriptBuffer) => liveTranscriptBuffer.dispose());
