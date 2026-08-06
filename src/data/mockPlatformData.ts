@@ -1,3 +1,8 @@
+import {
+  defaultLiveLanguageCodes,
+  getLiveLanguageLabel
+} from "./liveLanguages";
+
 export type PlatformComponentType = "video" | "slide" | "caption" | "qa" | "notice";
 
 export interface PlatformSlide {
@@ -15,6 +20,7 @@ export interface PlatformChannel {
   slug: string;
   notes: string;
   sourceLanguageCode: string;
+  enabledLanguageCodes: string[];
   videoUrl: string;
   sampleCaptionText: string;
   mode: "live" | "vod";
@@ -92,6 +98,7 @@ export const mockPlatformChannel: PlatformChannel = {
   slug: "main-keynote",
   notes: "의학 학술행사 기본 테스트 채널",
   sourceLanguageCode: "en",
+  enabledLanguageCodes: defaultLiveLanguageCodes,
   videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   sampleCaptionText: "",
   mode: "live",
@@ -244,14 +251,14 @@ export const mockDisplayUrls: PlatformDisplayUrl[] = [
   ...mockPlatformDisplays.flatMap((display) => {
     const channel = findPlatformChannelById(display.channelId) ?? mockPlatformChannel;
 
-    return [
-      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "ar", label: `${display.name} · Arabic`, path: `/live/${channel.slug}/ar?layoutId=${display.layoutId}` },
-      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "zh", label: `${display.name} · Chinese`, path: `/live/${channel.slug}/zh?layoutId=${display.layoutId}` },
-      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "en", label: `${display.name} · English`, path: `/live/${channel.slug}/en?layoutId=${display.layoutId}` },
-      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "fr", label: `${display.name} · French`, path: `/live/${channel.slug}/fr?layoutId=${display.layoutId}` },
-      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "ru", label: `${display.name} · Russian`, path: `/live/${channel.slug}/ru?layoutId=${display.layoutId}` },
-      { displayId: display.id, layoutId: display.layoutId, channelSlug: channel.slug, languageCode: "es", label: `${display.name} · Spanish`, path: `/live/${channel.slug}/es?layoutId=${display.layoutId}` }
-    ];
+    return channel.enabledLanguageCodes.map((languageCode) => ({
+      displayId: display.id,
+      layoutId: display.layoutId,
+      channelSlug: channel.slug,
+      languageCode,
+      label: `${display.name} · ${getLiveLanguageLabel(languageCode)}`,
+      path: `/live/${channel.slug}/${languageCode}?layoutId=${display.layoutId}`
+    }));
   })
 ];
 

@@ -17,24 +17,31 @@ import {
   clearStoredLayout,
   deleteStoredPlatformChannel,
   deleteStoredPlatformDisplay,
+  loadStoredChannelLanguageCodes,
   loadStoredPlatformChannels,
   loadStoredPlatformDisplays,
+  saveStoredChannelLanguageCodes,
   saveStoredLayout,
   saveStoredPlatformChannels,
   saveStoredPlatformDisplays
 } from "../../data/platformLayoutStorage";
 import LiveAudioTranslationTester from "../../components/platform/LiveAudioTranslationTester";
 import { adminFetch } from "../../utils/adminAuth";
+import {
+  defaultLiveLanguageCodes,
+  getLiveLanguageLabel,
+  getLiveLanguageNativeLabel,
+  liveLanguageOptions,
+  normalizeLiveLanguageList
+} from "../../data/liveLanguages";
 
 const captionPlayerOptions = {
-  languages: ["Arabic", "Chinese", "English", "French", "Korean", "Russian", "Spanish"],
+  languages: liveLanguageOptions.map((language) => language.label),
   themes: ["High Contrast", "Terminal", "Notepad", "Default"],
   fontSizes: ["18", "24", "30", "36", "48", "60"],
   fontFamilies: ["Arial", "Courier New", "Helvetica", "Verdana"],
   controls: ["View Transcript", "Show/Hide Header", "Scroll", "Whole Words"]
 };
-
-const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
 
 interface TranslationErrorLog {
   id: string;
@@ -63,13 +70,13 @@ function toSlug(value: string) {
     .replace(/^-+|-+$/g, "") || "channel";
 }
 
-function buildDisplayUrls(display: PlatformDisplayTarget, channelSlug: string): PlatformDisplayUrl[] {
-  return supportedLanguages.map((languageCode) => ({
+function buildDisplayUrls(display: PlatformDisplayTarget, channelSlug: string, languageCodes: string[]): PlatformDisplayUrl[] {
+  return languageCodes.map((languageCode) => ({
     displayId: display.id,
     layoutId: display.layoutId,
     channelSlug,
     languageCode,
-    label: `${display.name} · ${languageCode.toUpperCase()}`,
+    label: `${display.name} · ${getLiveLanguageLabel(languageCode)}`,
     path: `/live/${channelSlug}/${languageCode}?layoutId=${display.layoutId}`
   }));
 }
@@ -94,7 +101,7 @@ function createDefaultDisplay(channel: PlatformChannel, layoutId: string): Platf
     name: `${channel.title} 자막 송출`,
     description: `${channel.title}의 기본 언어별 자막 오버레이 화면`,
     layoutId,
-    defaultLanguageCode: "ko"
+    defaultLanguageCode: channel.enabledLanguageCodes?.[0] ?? "ko"
   };
 }
 
@@ -136,6 +143,9 @@ export default function AdminChannelsPage() {
   const [newDisplayDescription, setNewDisplayDescription] = useState("");
   const [newTemplateLayoutId, setNewTemplateLayoutId] = useState(mockPlatformLayout.id);
   const [newDefaultLanguageCode, setNewDefaultLanguageCode] = useState("ko");
+  const [selectedLanguageCodes, setSelectedLanguageCodes] = useState(() => (
+    loadStoredChannelLanguageCodes(selectedChannel.slug, selectedChannel.enabledLanguageCodes ?? defaultLiveLanguageCodes)
+  ));
   const [translationErrors, setTranslationErrors] = useState<TranslationErrorLog[]>([]);
   const [transcriptDocuments, setTranscriptDocuments] = useState<TranscriptDocumentSummary[]>([]);
   const [adminErrorMessage, setAdminErrorMessage] = useState("");
@@ -143,12 +153,15 @@ export default function AdminChannelsPage() {
   const mockDisplaysForChannel = mockPlatformDisplays.filter((display) => display.channelId === selectedChannel.id);
   const allPlatformDisplays = [...mockDisplaysForChannel, ...customDisplays];
   const selectedDisplay = allPlatformDisplays.find((display) => display.id === selectedDisplayId) ?? allPlatformDisplays[0];
-  const selectedDisplayUrls = selectedDisplay ? buildDisplayUrls(selectedDisplay, selectedChannel.slug) : [];
+  const selectedDefaultLanguageCode = selectedLanguageCodes.includes(selectedDisplay?.defaultLanguageCode ?? "")
+    ? selectedDisplay?.defaultLanguageCode
+    : selectedLanguageCodes[0] ?? "ko";
+  const selectedDisplayUrls = selectedDisplay ? buildDisplayUrls(selectedDisplay, selectedChannel.slug, selectedLanguageCodes) : [];
   const selectedPreviewPath = selectedDisplay
-    ? `/live/${selectedChannel.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}`
+    ? `/live/${selectedChannel.slug}/${selectedDefaultLanguageCode}?layoutId=${selectedDisplay.layoutId}`
     : `/live/${selectedChannel.slug}/ko`;
   const selectedFullPreviewPath = selectedDisplay
-    ? `/live/${selectedChannel.slug}/${selectedDisplay.defaultLanguageCode}?layoutId=${selectedDisplay.layoutId}&view=full`
+    ? `/live/${selectedChannel.slug}/${selectedDefaultLanguageCode}?layoutId=${selectedDisplay.layoutId}&view=full`
     : `/live/${selectedChannel.slug}/ko?view=full`;
   const availableTemplateLayouts = mergeStoredLayouts(selectedChannel.slug, allPlatformDisplays)
     .filter((layout) => layout.channelId === selectedChannel.id || layout.channelId === mockPlatformChannel.id);
@@ -157,6 +170,10 @@ export default function AdminChannelsPage() {
     const nextDisplays = loadStoredPlatformDisplays(selectedChannel.slug);
     setCustomDisplays(nextDisplays);
     setSelectedDisplayId("");
+    setSelectedLanguageCodes(loadStoredChannelLanguageCodes(
+      selectedChannel.slug,
+      selectedChannel.enabledLanguageCodes ?? defaultLiveLanguageCodes
+    ));
   }, [selectedChannel.slug]);
 
   const loadTranslationErrors = () => {
@@ -203,6 +220,7 @@ export default function AdminChannelsPage() {
       slug,
       notes: newChannelNotes.trim(),
       sourceLanguageCode: "auto",
+      enabledLanguageCodes: defaultLiveLanguageCodes,
       videoUrl: mockPlatformChannel.videoUrl,
       sampleCaptionText: "",
       mode: "live",
@@ -218,6 +236,7 @@ export default function AdminChannelsPage() {
       saveStoredPlatformDisplays(nextChannel.slug, [defaultDisplay]);
       setCustomChannels(nextChannels);
       setSelectedChannelId(nextChannel.id);
+      setSelectedLanguageCodes(defaultLiveLanguageCodes);
       setNewChannelTitle("");
       setNewChannelSlug("");
       setNewChannelNotes("");
@@ -273,7 +292,9 @@ export default function AdminChannelsPage() {
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,
-      defaultLanguageCode: newDefaultLanguageCode
+      defaultLanguageCode: selectedLanguageCodes.includes(newDefaultLanguageCode)
+        ? newDefaultLanguageCode
+        : selectedLanguageCodes[0] ?? "ko"
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
@@ -285,7 +306,7 @@ export default function AdminChannelsPage() {
       setNewDisplayName("");
       setNewDisplayDescription("");
       setNewTemplateLayoutId(mockPlatformLayout.id);
-      setNewDefaultLanguageCode("ko");
+      setNewDefaultLanguageCode(selectedLanguageCodes[0] ?? "ko");
       setAdminErrorMessage("");
       setAdminStatusMessage("레이아웃을 추가했습니다.");
     } catch (error) {
@@ -314,6 +335,39 @@ export default function AdminChannelsPage() {
     adminFetch("/api/translation-errors", { method: "DELETE" })
       .then(() => loadTranslationErrors())
       .catch(() => undefined);
+  };
+
+  const handleToggleChannelLanguage = (languageCode: string) => {
+    const nextLanguageCodes = selectedLanguageCodes.includes(languageCode)
+      ? selectedLanguageCodes.filter((selectedLanguageCode) => selectedLanguageCode !== languageCode)
+      : [...selectedLanguageCodes, languageCode];
+    const normalizedLanguageCodes = normalizeLiveLanguageList(nextLanguageCodes, selectedLanguageCodes);
+
+    if (normalizedLanguageCodes.length === 0) return;
+
+    try {
+      saveStoredChannelLanguageCodes(selectedChannel.slug, normalizedLanguageCodes);
+      setSelectedLanguageCodes(normalizedLanguageCodes);
+
+      if (customChannels.some((customChannel) => customChannel.id === selectedChannel.id)) {
+        const nextCustomChannels = customChannels.map((customChannel) => (
+          customChannel.id === selectedChannel.id
+            ? { ...customChannel, enabledLanguageCodes: normalizedLanguageCodes }
+            : customChannel
+        ));
+        saveStoredPlatformChannels(nextCustomChannels);
+        setCustomChannels(nextCustomChannels);
+      }
+
+      if (!normalizedLanguageCodes.includes(newDefaultLanguageCode)) {
+        setNewDefaultLanguageCode(normalizedLanguageCodes[0] ?? "ko");
+      }
+      setAdminStatusMessage("채널 언어 설정을 저장했습니다.");
+      setAdminErrorMessage("");
+    } catch (error) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(error instanceof Error ? error.message : "언어 설정 저장에 실패했습니다.");
+    }
   };
 
   const handleOpenAllLanguageUrls = () => {
@@ -370,7 +424,7 @@ export default function AdminChannelsPage() {
                       {channel.notes && (
                         <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-slate-500">{channel.notes}</span>
                       )}
-                      <span className="mt-2 block font-mono text-[10px] text-indigo-600">/live/{channel.slug}/ko</span>
+                      <span className="mt-2 block font-mono text-[10px] text-indigo-600">/live/{channel.slug}/:languageCode</span>
                     </button>
                     {isCustom && (
                       <button
@@ -470,6 +524,48 @@ export default function AdminChannelsPage() {
                 </Link>
               </div>
             </div>
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Event Languages</p>
+                  <h4 className="mt-1 text-sm font-black text-slate-900">이 채널에서 생성할 언어 URL</h4>
+                </div>
+                <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-black text-indigo-700">
+                  {selectedLanguageCodes.length}개 선택
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {liveLanguageOptions.map((language) => {
+                  const isChecked = selectedLanguageCodes.includes(language.code);
+                  const isOnlySelectedLanguage = isChecked && selectedLanguageCodes.length === 1;
+
+                  return (
+                    <label
+                      key={language.code}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                        isChecked
+                          ? "border-indigo-200 bg-white text-indigo-800 shadow-sm"
+                          : "border-slate-200 bg-white/60 text-slate-600 hover:border-slate-300 hover:bg-white"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={isOnlySelectedLanguage}
+                        onChange={() => handleToggleChannelLanguage(language.code)}
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate">{language.label}</span>
+                        <span className="block font-mono text-[10px] text-slate-400">
+                          {language.code.toUpperCase()} · {language.nativeLabel}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -522,8 +618,10 @@ export default function AdminChannelsPage() {
                     onChange={(event) => setNewDefaultLanguageCode(event.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
                   >
-                    {supportedLanguages.map((languageCode) => (
-                      <option key={languageCode} value={languageCode}>{languageCode.toUpperCase()}</option>
+                    {selectedLanguageCodes.map((languageCode) => (
+                      <option key={languageCode} value={languageCode}>
+                        {languageCode.toUpperCase()} · {getLiveLanguageLabel(languageCode)}
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -576,7 +674,7 @@ export default function AdminChannelsPage() {
                         {isSelected ? "테스트 중" : "테스트 선택"}
                       </button>
                       <Link
-                        to={`/live/${selectedChannel.slug}/${display.defaultLanguageCode}?layoutId=${display.layoutId}`}
+                        to={`/live/${selectedChannel.slug}/${selectedLanguageCodes.includes(display.defaultLanguageCode) ? display.defaultLanguageCode : selectedLanguageCodes[0] ?? "ko"}?layoutId=${display.layoutId}`}
                         className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-[11px] font-bold text-slate-700 hover:bg-slate-100"
                       >
                         미리보기
@@ -626,7 +724,9 @@ export default function AdminChannelsPage() {
                       className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-bold text-slate-900">{displayUrl.languageCode.toUpperCase()} 라이브 URL</p>
+                        <p className="text-xs font-bold text-slate-900">
+                          {displayUrl.languageCode.toUpperCase()} · {getLiveLanguageNativeLabel(displayUrl.languageCode)}
+                        </p>
                         <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
                       </div>
                       <p className="mt-1 break-all font-mono text-[11px] text-indigo-600">{displayUrl.path}</p>
@@ -639,6 +739,7 @@ export default function AdminChannelsPage() {
               <LiveAudioTranslationTester
                 channelSlug={selectedChannel.slug}
                 displayName={`${selectedChannel.title} · ${selectedDisplay.name}`}
+                targetLanguageCodes={selectedLanguageCodes}
               />
             </>
           )}

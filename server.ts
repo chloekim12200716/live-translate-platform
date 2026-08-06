@@ -7,6 +7,13 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { WebSocket, WebSocketServer } from "ws";
+import {
+  defaultLiveLanguageCodes,
+  getLiveLanguageLabel,
+  getLiveSpeechLanguageCode,
+  getLiveTranslateLanguageCode,
+  supportedLiveLanguageCodes
+} from "./src/data/liveLanguages";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -32,12 +39,12 @@ const MAX_LIVE_AUDIO_FRAME_BYTES = Number(process.env.MAX_LIVE_AUDIO_FRAME_BYTES
 const MAX_LIVE_RECONNECT_BUFFER_FRAMES = Number(process.env.MAX_LIVE_RECONNECT_BUFFER_FRAMES || 240);
 const LIVE_RECONNECT_BASE_DELAY_MS = Number(process.env.LIVE_RECONNECT_BASE_DELAY_MS || 1000);
 const LIVE_RECONNECT_MAX_DELAY_MS = Number(process.env.LIVE_RECONNECT_MAX_DELAY_MS || 15000);
-const MAX_LIVE_TARGET_LANGUAGE_COUNT = Number(process.env.MAX_LIVE_TARGET_LANGUAGE_COUNT || 7);
-const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || "ar,zh,en,fr,ko,ru,es")
+const MAX_LIVE_TARGET_LANGUAGE_COUNT = Number(process.env.MAX_LIVE_TARGET_LANGUAGE_COUNT || 12);
+const DEFAULT_LIVE_TARGET_LANGUAGES = (process.env.LIVE_TARGET_LANGUAGES || defaultLiveLanguageCodes.join(","))
   .split(",")
   .map((languageCode) => languageCode.trim().toLowerCase())
   .filter(Boolean);
-const SUPPORTED_LIVE_TARGET_LANGUAGES = new Set(["ar", "zh", "en", "fr", "ko", "ru", "es"]);
+const SUPPORTED_LIVE_TARGET_LANGUAGES = new Set(supportedLiveLanguageCodes);
 
 function getAdminTokenFromRequest(req: express.Request) {
   const headerToken = req.header("x-admin-token");
@@ -85,19 +92,8 @@ function normalizeLiveTargetLanguageCode(languageCode: string) {
   return normalizedLanguageCode.split("-")[0] || "";
 }
 
-const translationLanguageLabels: Record<string, string> = {
-  ar: "Arabic",
-  zh: "Simplified Chinese",
-  en: "English",
-  fr: "French",
-  ko: "Korean",
-  ru: "Russian",
-  es: "Spanish"
-};
-
 function getLanguageLabel(languageCode: string | undefined) {
-  if (!languageCode) return "the requested language";
-  return translationLanguageLabels[languageCode.toLowerCase()] || languageCode;
+  return getLiveLanguageLabel(languageCode);
 }
 
 function getFallbackTranslation(text: string, sourceLang: string | undefined, targetLang: string | undefined) {
@@ -1312,33 +1308,11 @@ function broadcastLiveTranslatedAudio(channelSlug: string, targetLang: string, m
 }
 
 function getLiveAudioLanguageCode(languageCode: string) {
-  const normalizedLanguageCode = languageCode.toLowerCase();
-  const bcp47LanguageCodes: Record<string, string> = {
-    ar: "ar",
-    zh: "zh-CN",
-    en: "en-US",
-    fr: "fr-FR",
-    ko: "ko-KR",
-    ru: "ru-RU",
-    es: "es-ES"
-  };
-
-  return bcp47LanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
+  return getLiveSpeechLanguageCode(languageCode);
 }
 
 function getLiveTranslateTargetLanguageCode(languageCode: string) {
-  const normalizedLanguageCode = languageCode.toLowerCase();
-  const targetLanguageCodes: Record<string, string> = {
-    ar: "ar",
-    zh: "zh-CN",
-    en: "en",
-    fr: "fr",
-    ko: "ko",
-    ru: "ru",
-    es: "es"
-  };
-
-  return targetLanguageCodes[normalizedLanguageCode] ?? normalizedLanguageCode;
+  return getLiveTranslateLanguageCode(languageCode);
 }
 
 function getLiveTargetLanguages(requestUrl: URL) {

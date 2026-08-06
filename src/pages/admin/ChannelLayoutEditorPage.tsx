@@ -22,6 +22,7 @@ import {
 } from "../../data/mockPlatformData";
 import {
   clearStoredLayout,
+  loadStoredChannelLanguageCodes,
   loadStoredPlatformChannels,
   loadStoredLayoutById,
   loadStoredPlatformDisplays,
@@ -40,8 +41,11 @@ import {
   layoutUnitStep,
   snapLayoutUnit
 } from "../../utils/layoutEditor";
+import {
+  defaultLiveLanguageCodes,
+  getLiveLanguageLabel
+} from "../../data/liveLanguages";
 
-const supportedLanguages = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
 const MAX_BACKGROUND_IMAGE_BYTES = 2 * 1024 * 1024;
 const supportedBackgroundImageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
@@ -70,6 +74,7 @@ export default function ChannelLayoutEditorPage() {
   const mockLayoutsForChannel = mockPlatformLayouts.filter((layout) => layout.channelId === channel.id);
   const allPlatformDisplays = [...mockDisplaysForChannel, ...customDisplays];
   const allBaseLayouts = [...mockLayoutsForChannel, ...customLayouts];
+  const channelLanguageCodes = loadStoredChannelLanguageCodes(channel.slug, channel.enabledLanguageCodes ?? defaultLiveLanguageCodes);
   const selectedBaseLayout = allBaseLayouts.find((layout) => layout.id === selectedLayoutId)
     ?? allBaseLayouts[0]
     ?? {
@@ -79,7 +84,9 @@ export default function ChannelLayoutEditorPage() {
       name: `${channel.title} Caption Stage`
     };
   const selectedDisplay = allPlatformDisplays.find((display) => display.layoutId === selectedBaseLayout.id);
-  const previewLanguageCode = selectedDisplay?.defaultLanguageCode ?? channel.sourceLanguageCode;
+  const previewLanguageCode = channelLanguageCodes.includes(selectedDisplay?.defaultLanguageCode ?? "")
+    ? selectedDisplay?.defaultLanguageCode
+    : channelLanguageCodes[0] ?? channel.sourceLanguageCode;
   const [layout, setLayout] = useState(() => loadStoredLayout(channel.slug, selectedBaseLayout, selectedBaseLayout.id));
   const [selectedComponentId, setSelectedComponentId] = useState(layout.components[0]?.id ?? "");
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -124,6 +131,11 @@ export default function ChannelLayoutEditorPage() {
     setSavedAt(null);
   }, [channel.slug, selectedBaseLayout.id]);
 
+  useEffect(() => {
+    if (channelLanguageCodes.includes(newDefaultLanguageCode)) return;
+    setNewDefaultLanguageCode(channelLanguageCodes[0] ?? "en");
+  }, [channelLanguageCodes.join(","), newDefaultLanguageCode]);
+
   const handleLayoutSelect = (layoutId: string) => {
     setSearchParams({ layoutId });
   };
@@ -150,7 +162,9 @@ export default function ChannelLayoutEditorPage() {
       name,
       description: newDisplayDescription.trim() || `${name} 전용 송출 레이아웃`,
       layoutId,
-      defaultLanguageCode: newDefaultLanguageCode
+      defaultLanguageCode: channelLanguageCodes.includes(newDefaultLanguageCode)
+        ? newDefaultLanguageCode
+        : channelLanguageCodes[0] ?? "en"
     };
     const nextDisplays = [...customDisplays, nextDisplay];
 
@@ -160,7 +174,7 @@ export default function ChannelLayoutEditorPage() {
       setCustomDisplays(nextDisplays);
       setNewDisplayName("");
       setNewDisplayDescription("");
-      setNewDefaultLanguageCode("en");
+      setNewDefaultLanguageCode(channelLanguageCodes[0] ?? "en");
       setEditorErrorMessage("");
       setSearchParams({ layoutId });
     } catch (error) {
@@ -598,8 +612,10 @@ export default function ChannelLayoutEditorPage() {
                   onChange={(event) => setNewDefaultLanguageCode(event.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-400"
                 >
-                  {supportedLanguages.map((languageCode) => (
-                    <option key={languageCode} value={languageCode}>{languageCode.toUpperCase()}</option>
+                  {channelLanguageCodes.map((languageCode) => (
+                    <option key={languageCode} value={languageCode}>
+                      {languageCode.toUpperCase()} · {getLiveLanguageLabel(languageCode)}
+                    </option>
                   ))}
                 </select>
               </label>

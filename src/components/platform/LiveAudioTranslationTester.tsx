@@ -5,9 +5,8 @@ import { appendAdminTokenToUrl } from "../../utils/adminAuth";
 interface LiveAudioTranslationTesterProps {
   channelSlug: string;
   displayName?: string;
+  targetLanguageCodes: string[];
 }
-
-const liveTargetLanguageCodes = ["ar", "zh", "en", "fr", "ko", "ru", "es"];
 
 function float32ToPcm16Buffer(input: Float32Array) {
   const buffer = new ArrayBuffer(input.length * 2);
@@ -21,12 +20,12 @@ function float32ToPcm16Buffer(input: Float32Array) {
   return buffer;
 }
 
-function createLiveAudioWebSocketUrl(channelSlug: string, translationMode: "realtime" | "sentence") {
+function createLiveAudioWebSocketUrl(channelSlug: string, translationMode: "realtime" | "sentence", targetLanguageCodes: string[]) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({
     channelSlug,
     sourceLang: "auto",
-    targetLangs: liveTargetLanguageCodes.join(","),
+    targetLangs: targetLanguageCodes.join(","),
     mode: translationMode,
     mimeType: "audio/pcm;rate=16000"
   });
@@ -36,7 +35,8 @@ function createLiveAudioWebSocketUrl(channelSlug: string, translationMode: "real
 
 export default function LiveAudioTranslationTester({
   channelSlug,
-  displayName = "선택된 플랫폼"
+  displayName = "선택된 플랫폼",
+  targetLanguageCodes
 }: LiveAudioTranslationTesterProps) {
   const [translationMode, setTranslationMode] = useState<"realtime" | "sentence">("sentence");
   const [isCapturing, setIsCapturing] = useState(false);
@@ -108,7 +108,7 @@ export default function LiveAudioTranslationTester({
       }
       pushDiagnosticEvent(`audio track selected: ${audioTracks[0]?.label || "unknown"}`);
 
-      const socket = new WebSocket(createLiveAudioWebSocketUrl(channelSlug, translationMode));
+      const socket = new WebSocket(createLiveAudioWebSocketUrl(channelSlug, translationMode, targetLanguageCodes));
       socket.binaryType = "arraybuffer";
       socket.onopen = () => {
         setStatusMessage("Live API WebSocket 연결 중");
@@ -203,7 +203,7 @@ export default function LiveAudioTranslationTester({
       setLatestTranscript("");
       setDiagnosticEvents([]);
       setStatusMessage("탭/시스템 오디오 캡처 준비 중");
-      pushDiagnosticEvent(`capture initialized (${translationMode})`);
+      pushDiagnosticEvent(`capture initialized (${translationMode}, ${targetLanguageCodes.join(",")})`);
     } catch (error) {
       cleanupAudio();
       socketRef.current?.close();
@@ -226,6 +226,9 @@ export default function LiveAudioTranslationTester({
           <h3 className="mt-1 text-lg font-bold text-slate-900">저지연 오디오 전사/번역 테스트</h3>
           <p className="mt-1 text-sm text-slate-500">
             {displayName} 레이아웃으로 테스트합니다. 입력 언어는 Gemini Live API가 자동 인식하고, 열린 언어별 URL이 같은 채널 자막 queue와 언어별 통역 오디오 stream을 구독합니다.
+          </p>
+          <p className="mt-2 text-xs font-semibold text-emerald-700">
+            대상 언어: {targetLanguageCodes.map((languageCode) => languageCode.toUpperCase()).join(", ")}
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">

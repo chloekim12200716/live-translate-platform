@@ -4,6 +4,10 @@ import {
   PlatformDisplayTarget,
   PlatformLayout
 } from "./mockPlatformData";
+import {
+  defaultLiveLanguageCodes,
+  normalizeLiveLanguageList
+} from "./liveLanguages";
 
 const PLATFORM_CHANNELS_STORAGE_KEY = "platformChannels";
 const LEGACY_PLATFORM_CHANNELS_STORAGE_KEYS = ["platformChannels:event-medicast-2026"];
@@ -18,6 +22,10 @@ export function getPlatformLayoutStorageKey(channelSlug: string, layoutId: strin
 
 export function getPlatformDisplaysStorageKey(channelSlug: string) {
   return `platformDisplays:${channelSlug}`;
+}
+
+export function getPlatformChannelLanguagesStorageKey(channelSlug: string) {
+  return `platformChannelLanguages:${channelSlug}`;
 }
 
 function normalizeLayout(layout: PlatformLayout): PlatformLayout {
@@ -110,7 +118,8 @@ export function clearStoredLayout(channelSlug: string, layoutId?: string) {
 function normalizeDisplay(display: PlatformDisplayTarget): PlatformDisplayTarget {
   return {
     ...display,
-    channelId: display.channelId ?? ""
+    channelId: display.channelId ?? "",
+    defaultLanguageCode: normalizeLiveLanguageList([display.defaultLanguageCode], ["ko"])[0] ?? "ko"
   };
 }
 
@@ -122,6 +131,7 @@ function normalizeChannel(channel: PlatformChannel & { speakerAffiliation?: stri
     id: channel.id ?? channel.slug,
     slug: channel.slug ?? channel.id,
     notes: channel.notes ?? _speakerAffiliation ?? "",
+    enabledLanguageCodes: normalizeLiveLanguageList(channel.enabledLanguageCodes ?? defaultLiveLanguageCodes),
     mode: channel.mode ?? "live",
     slides: channel.slides ?? []
   };
@@ -154,6 +164,28 @@ export function saveStoredPlatformChannels(channels: PlatformChannel[]) {
 export function deleteStoredPlatformChannel(channelId: string) {
   const channels = loadStoredPlatformChannels();
   saveStoredPlatformChannels(channels.filter((channel) => channel.id !== channelId));
+}
+
+export function loadStoredChannelLanguageCodes(channelSlug: string, fallbackLanguageCodes = defaultLiveLanguageCodes) {
+  if (typeof window === "undefined") return normalizeLiveLanguageList(fallbackLanguageCodes);
+
+  const rawLanguageCodes = readLocalStorageItem(getPlatformChannelLanguagesStorageKey(channelSlug));
+  if (!rawLanguageCodes) return normalizeLiveLanguageList(fallbackLanguageCodes);
+
+  try {
+    const parsedLanguageCodes = JSON.parse(rawLanguageCodes) as string[];
+    return normalizeLiveLanguageList(parsedLanguageCodes, fallbackLanguageCodes);
+  } catch (error) {
+    console.error("Failed to parse stored channel languages:", error);
+    return normalizeLiveLanguageList(fallbackLanguageCodes);
+  }
+}
+
+export function saveStoredChannelLanguageCodes(channelSlug: string, languageCodes: string[]) {
+  writeLocalStorageItem(
+    getPlatformChannelLanguagesStorageKey(channelSlug),
+    JSON.stringify(normalizeLiveLanguageList(languageCodes))
+  );
 }
 
 export function loadStoredPlatformDisplays(channelSlug: string): PlatformDisplayTarget[] {
