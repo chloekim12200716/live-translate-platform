@@ -14,6 +14,7 @@ import {
   getLiveTranslateLanguageCode,
   supportedLiveLanguageCodes
 } from "./src/data/liveLanguages";
+import { createGeminiLiveConnectConfig } from "./src/server/geminiLiveConfig";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -1915,23 +1916,11 @@ function installAudioLiveWebSocketServer(server: HttpServer) {
         });
 
         const liveConnection = await (liveAiClient as any).live.connect({
-          model: GEMINI_LIVE_MODEL,
-          config: {
-            responseModalities: ["AUDIO"],
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            contextWindowCompression: {
-              slidingWindow: {}
-            },
-            sessionResumption: {
-              ...(state.sessionHandle ? { handle: state.sessionHandle } : {}),
-              transparent: true
-            },
-            translationConfig: {
-              targetLanguageCode: getLiveTranslateTargetLanguageCode(targetLang),
-              echoTargetLanguage: true
-            }
-          },
+          ...createGeminiLiveConnectConfig({
+            model: GEMINI_LIVE_MODEL,
+            targetLanguageCode: getLiveTranslateTargetLanguageCode(targetLang),
+            sessionHandle: state.sessionHandle
+          }),
           callbacks: {
             onopen: () => {
               if (connectionGeneration !== getConnectionState(targetLang).generation) return;

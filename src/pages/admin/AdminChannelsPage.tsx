@@ -27,6 +27,7 @@ import {
 } from "../../data/platformLayoutStorage";
 import LiveAudioTranslationTester from "../../components/platform/LiveAudioTranslationTester";
 import { adminFetch } from "../../utils/adminAuth";
+import { openLanguageUrls } from "../../utils/openLanguageUrls";
 import {
   defaultLiveLanguageCodes,
   getLiveLanguageLabel,
@@ -371,9 +372,24 @@ export default function AdminChannelsPage() {
   };
 
   const handleOpenAllLanguageUrls = () => {
-    selectedDisplayUrls.forEach((displayUrl) => {
-      window.open(displayUrl.path, "_blank", "noopener,noreferrer");
-    });
+    const openResult = openLanguageUrls(selectedDisplayUrls.map((displayUrl) => displayUrl.path));
+
+    if (openResult.attemptedCount === 0) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage("열 수 있는 언어 URL이 없습니다. 먼저 채널 언어를 선택해 주세요.");
+      return;
+    }
+
+    if (openResult.blockedCount > 0) {
+      setAdminStatusMessage("");
+      setAdminErrorMessage(
+        `${openResult.openedCount}/${openResult.attemptedCount}개 언어 탭만 열렸습니다. 브라우저 팝업 차단을 허용한 뒤 다시 시도하거나 아래 개별 링크를 직접 열어 주세요.`
+      );
+      return;
+    }
+
+    setAdminErrorMessage("");
+    setAdminStatusMessage(`${openResult.openedCount}개 언어 탭을 열었습니다.`);
   };
 
   return (
